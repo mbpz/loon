@@ -1,0 +1,27 @@
+# Rust / Cargo
+/target
+**/target
+**/*.rs.bk
+Cargo.lock
+**/.cargo/config.toml
+**/Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# 项目数据（运行时生成）
+/data
+**/data/
+**/loon-data/
+**/loon.toml
+**/loon.local.toml
+.env
+.env.local
+
+# 临时文件
+*.tmp
+*.log
