@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use crate::{AgentId, CustomerId, SessionId, EventId, ToolId, JsonValue};
+use crate::{AgentId, CustomerId, SessionId, EventId, ToolCallData, ToolId, JsonValue};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SessionMode {
@@ -128,13 +128,6 @@ pub struct SessionUpdateParams {
     pub title: Option<String>,
     pub mode: Option<SessionMode>,
     pub labels: Option<HashSet<String>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ToolCallData {
-    pub tool_id: String,
-    pub arguments: JsonValue,
-    pub result: Option<crate::ToolResult>,
 }
 
 #[cfg(test)]

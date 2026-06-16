@@ -1,5 +1,6 @@
 //! Core domain types for loon.
 pub mod agent;
+pub mod async_utils;
 pub mod basic_tracer;
 pub mod common;
 pub mod console_logger;
