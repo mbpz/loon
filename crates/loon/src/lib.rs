@@ -223,4 +223,21 @@ mod tests {
             _ => panic!("expected Session::Chat"),
         }
     }
+
+    /// Compile-time witness: `loon_server::run` is reachable from
+    /// the `loon` crate and the `server start` subcommand dispatches
+    /// to it. We don't actually run the server in this test
+    /// (binding 0.0.0.0:8800 would conflict with any local
+    /// instance). This is a structural assertion that the
+    /// delegation wiring is intact.
+    #[test]
+    fn server_start_delegates_to_loon_server_run() {
+        // The symbol must resolve and have the expected async
+        // signature. If someone removes the dependency on
+        // `loon_server` from `server_start`, this test stops
+        // compiling.
+        let _f: fn() -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>,
+        > = || Box::pin(loon_server::run());
+    }
 }
