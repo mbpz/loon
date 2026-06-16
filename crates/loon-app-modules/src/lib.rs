@@ -6,3 +6,4 @@ pub mod journeys;
 pub mod sessions;
 pub mod customers;
 pub mod glossary;
+pub mod tags;
