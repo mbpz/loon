@@ -12,6 +12,7 @@ pub mod ids;
 pub mod journey;
 pub mod logger;
 pub mod macros;
+pub mod meter;
 pub mod observation;
 pub mod session;
 pub mod stores;
