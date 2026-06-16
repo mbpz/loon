@@ -1,6 +1,7 @@
 //! `loon-engine` — orchestration layer that turns an `Interaction`
 //! into a response.
 
+pub mod alpha_engine;
 pub mod canned_response_generator;
 pub mod entity_context;
 pub mod engine_context;
@@ -20,6 +21,7 @@ pub mod relational_resolver;
 pub mod tool_calling;
 pub mod tool_event_generator;
 
+pub use alpha_engine::*;
 pub use canned_response_generator::*;
 pub use entity_context::*;
 pub use engine_context::*;
