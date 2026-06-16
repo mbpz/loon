@@ -129,6 +129,10 @@ fn _assert_dyn_engine(_: &dyn Engine) {}
 mod tests {
     use super::*;
     use loon_core::SessionId;
+    use loon_nlp::test_utils::FakeNlpService;
+    use loon_persistence::backends::json_file::JsonFileDocumentDatabase;
+    use std::time::Duration;
+    use tempfile::tempdir;
 
     #[tokio::test]
     async fn builder_returns_server() {
@@ -158,5 +162,28 @@ mod tests {
             })
             .await
             .expect("run ok");
+    }
+
+    #[tokio::test]
+    async fn builder_accepts_document_db_and_nlp_service() {
+        // Phase 1: the builder records the dependency type names
+        // for diagnostics but does not yet wire them into the
+        // engine. This test simply exercises both builder hooks
+        // with concrete types so the public API surface stays
+        // covered.
+        let dir = tempdir().expect("tempdir");
+        let db: Arc<JsonFileDocumentDatabase> = Arc::new(
+            JsonFileDocumentDatabase::new(dir.path(), Duration::from_secs(1))
+                .expect("db"),
+        );
+        let nlp: Arc<dyn loon_nlp::NlpService> = Arc::new(FakeNlpService::new());
+
+        let server = Server::builder()
+            .with_document_db(db)
+            .with_nlp_service(nlp)
+            .build()
+            .await
+            .expect("build ok");
+        let _: Arc<dyn Engine> = server.engine.clone();
     }
 }
