@@ -4,3 +4,4 @@ pub mod agents;
 pub mod guidelines;
 pub mod journeys;
 pub mod sessions;
+pub mod customers;
