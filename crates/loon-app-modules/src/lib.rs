@@ -10,3 +10,4 @@ pub mod tags;
 pub mod canned_responses;
 pub mod capabilities;
 pub mod context_variables;
+pub mod evaluations;
