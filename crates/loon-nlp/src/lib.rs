@@ -3,6 +3,7 @@ pub mod error;
 pub mod config;
 pub mod schematic;
 pub mod generator;
+pub mod providers;
 pub mod macros;
 
 pub use error::*;
