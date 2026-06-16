@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use crate::{AgentId, CustomerId, SessionId, EventId, ToolCallData, ToolId, JsonValue};
+use crate::{AgentId, CustomerId, SessionId, EventId, ToolCallData, JsonValue};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SessionMode {
