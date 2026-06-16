@@ -8,7 +8,7 @@ use uuid::Uuid;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use crate::{
-    Document, DocumentCollection, DocumentDatabase, DocumentFilter, DocumentUpdate,
+    Document, DocumentCollection, DocumentDatabase, DocumentDatabaseHandle, DocumentFilter, DocumentUpdate,
     InsertResult, UpdateResult, DeleteResult, BaseDocument, DocumentLoader,
 };
 use crate::error::PersistenceResult;
@@ -25,6 +25,14 @@ impl JsonFileDocumentDatabase {
             root: root.to_path_buf(),
             flush_interval,
         })
+    }
+}
+
+#[async_trait]
+impl DocumentDatabaseHandle for JsonFileDocumentDatabase {
+    async fn ping(&self) -> PersistenceResult<()> {
+        // Phase 1: no-op
+        Ok(())
     }
 }
 
