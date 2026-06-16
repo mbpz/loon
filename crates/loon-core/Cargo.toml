@@ -12,6 +12,8 @@ nanoid = { workspace = true }
 base64 = "0.22"
 xxhash-rust = { workspace = true }
 thiserror = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
 
 [lints]
 workspace = true
