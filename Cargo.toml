@@ -1,0 +1,74 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/loon-core",
+    "crates/loon-emission",
+    "crates/loon-app-modules",
+    "crates/loon-persistence",
+    "crates/loon-nlp",
+    "crates/loon-engine",
+    "crates/loon-sdk",
+    "crates/loon-server",
+    "crates/loon",
+]
+
+[package]
+name = "loon-workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dev-dependencies]
+loon-sdk = { path = "crates/loon-sdk" }
+loon-core = { path = "crates/loon-core" }
+loon-persistence = { path = "crates/loon-persistence" }
+loon-nlp = { path = "crates/loon-nlp" }
+tokio = { workspace = true }
+tempfile = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
+nanoid = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+futures = "0.3"
+tokio-stream = "0.1"
+axum = { version = "0.8", features = ["ws", "macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+clap = { version = "4", features = ["derive"] }
+dialoguer = "0.11"
+console = "0.15"
+toml = "0.8"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+jsonschema = "0.18"
+async-stream = "0.3"
+parking_lot = "0.12"
+dotenvy = "0.15"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[profile.dev]
+opt-level = 0
+debug = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

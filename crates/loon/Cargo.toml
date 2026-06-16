@@ -1,0 +1,24 @@
+[package]
+name = "loon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+loon-core = { path = "../loon-core" }
+loon-sdk = { path = "../loon-sdk" }
+loon-server = { path = "../loon-server" }
+clap = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+dialoguer = { workspace = true }
+console = { workspace = true }
+futures = { workspace = true }
+tokio-tungstenite = "0.23"

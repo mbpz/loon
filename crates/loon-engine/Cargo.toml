@@ -1,0 +1,28 @@
+[package]
+name = "loon-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+loon-core = { path = "../loon-core" }
+loon-emission = { path = "../loon-emission" }
+loon-nlp = { path = "../loon-nlp" }
+loon-persistence = { path = "../loon-persistence" }
+loon-app-modules = { path = "../loon-app-modules" }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+parking_lot = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+futures = { workspace = true }
+nanoid = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true
