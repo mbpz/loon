@@ -11,6 +11,7 @@ pub mod service;
 pub mod fallback;
 pub mod providers;
 pub mod macros;
+pub mod test_utils;
 
 pub use error::*;
 pub use config::*;

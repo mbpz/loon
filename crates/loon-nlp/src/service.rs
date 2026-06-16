@@ -9,7 +9,7 @@ use crate::{
 pub trait NlpService: Send + Sync {
     fn config(&self) -> &NlpConfig;
     async fn text_generator(&self) -> NlpResult<Box<dyn StreamingTextGenerator>>;
-    async fn schematic_generator<T: Schematic + 'static>(
+    async fn schematic_generator<T: Schematic + Default + 'static>(
         &self,
     ) -> NlpResult<Box<dyn SchematicGenerator<T>>>;
     async fn embedder(&self) -> NlpResult<Box<dyn Embedder>>;

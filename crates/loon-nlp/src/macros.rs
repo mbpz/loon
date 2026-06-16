@@ -50,7 +50,7 @@ macro_rules! define_schematic {
         $vis:vis struct $name:ident { $( $fvis:vis $field:ident : $fty:ty ),* $(,)? }
     ) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(Debug, Clone, Default, ::serde::Serialize, ::serde::Deserialize)]
         $vis struct $name { $( $fvis $field : $fty ),* }
 
         impl $crate::Schematic for $name {
