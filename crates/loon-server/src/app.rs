@@ -43,6 +43,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/v1/relationships",
             get(crate::routes::relationships::list_relationships),
         )
+        .route("/v1/sessions/{id}/chat", get(crate::routes::chat::chat_ws))
         .with_state(state)
 }
 
