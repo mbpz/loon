@@ -1,1 +1,3 @@
-//! Stub routes module — fleshed out in Task 8.2 / 8.3 / 8.4.
+//! HTTP / WS route handlers.
+
+pub mod health;
