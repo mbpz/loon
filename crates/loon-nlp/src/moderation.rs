@@ -15,3 +15,27 @@ pub struct ModerationResult {
 pub trait Moderater: Send + Sync {
     async fn moderate(&self, text: &str) -> NlpResult<ModerationResult>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct PassModerater;
+    #[async_trait]
+    impl Moderater for PassModerater {
+        async fn moderate(&self, _text: &str) -> NlpResult<ModerationResult> {
+            Ok(ModerationResult {
+                flagged: false,
+                categories: Default::default(),
+                scores: Default::default(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn moderater_trait_dispatch() {
+        let m: Box<dyn Moderater> = Box::new(PassModerater);
+        let r = m.moderate("hi").await.unwrap();
+        assert!(!r.flagged);
+    }
+}
