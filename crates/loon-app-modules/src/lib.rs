@@ -7,3 +7,4 @@ pub mod sessions;
 pub mod customers;
 pub mod glossary;
 pub mod tags;
+pub mod canned_responses;
