@@ -10,6 +10,7 @@ pub mod guideline;
 pub mod id_generator;
 pub mod ids;
 pub mod journey;
+pub mod journey_guideline_projection;
 pub mod logger;
 pub mod macros;
 pub mod meter;
