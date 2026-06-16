@@ -7,3 +7,13 @@ license.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+loon-core = { path = "../loon-core" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+parking_lot = { workspace = true }
+chrono = { workspace = true }
