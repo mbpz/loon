@@ -87,7 +87,7 @@ impl<T: Schematic> SchematicGenerator<T> for AnthropicSchematicGenerator<T> {
     async fn generate(
         &self,
         prompt: String,
-        options: SchematicGenerationOptions,
+        _options: SchematicGenerationOptions,
     ) -> NlpResult<SchematicGenerationResult<T>> {
         let start = Instant::now();
         let endpoint = self

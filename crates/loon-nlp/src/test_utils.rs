@@ -14,6 +14,43 @@ use crate::{
     StreamingTextGenerationResult, StreamingTextGenerator, TextGenerationOptions, Tokenizer,
 };
 
+/// A `SchematicGenerator` that always returns `Err(NlpError::Upstream)`.
+pub struct AlwaysFailingSchematicGen;
+
+#[async_trait]
+impl<T> SchematicGenerator<T> for AlwaysFailingSchematicGen
+where
+    T: Schematic + serde::de::DeserializeOwned + Send + 'static,
+{
+    async fn generate(
+        &self,
+        _prompt: String,
+        _options: SchematicGenerationOptions,
+    ) -> NlpResult<SchematicGenerationResult<T>> {
+        Err(crate::error::NlpError::Upstream("primary failed".into()))
+    }
+}
+
+/// A `SchematicGenerator` that always returns `Ok(T::default())`.
+pub struct SuccessSchematicGen;
+
+#[async_trait]
+impl<T> SchematicGenerator<T> for SuccessSchematicGen
+where
+    T: Schematic + serde::de::DeserializeOwned + Default + Send + 'static,
+{
+    async fn generate(
+        &self,
+        _prompt: String,
+        _options: SchematicGenerationOptions,
+    ) -> NlpResult<SchematicGenerationResult<T>> {
+        Ok(SchematicGenerationResult {
+            value: T::default(),
+            info: GenerationInfo::default(),
+        })
+    }
+}
+
 /// A `SchematicGenerator` that always returns `T::default()`.
 pub struct EchoSchematicGenerator;
 
