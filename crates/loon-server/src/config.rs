@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use anyhow::Context;
+use loon_persistence::PersistenceConfig;
 use serde::Deserialize;
 
 /// Top-level configuration tree for `loon-server`.
@@ -23,22 +24,6 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             bind: "0.0.0.0:8800".into(),
-        }
-    }
-}
-
-/// `[persistence]` section.
-#[derive(Debug, Clone, Deserialize)]
-pub struct PersistenceConfig {
-    pub root: String,
-    pub flush_interval_ms: u64,
-}
-
-impl Default for PersistenceConfig {
-    fn default() -> Self {
-        Self {
-            root: "./data".into(),
-            flush_interval_ms: 5000,
         }
     }
 }
@@ -83,6 +68,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use loon_persistence::PersistenceBackendConfig;
 
     #[test]
     fn default_bind_is_08800() {
@@ -91,10 +77,12 @@ mod tests {
     }
 
     #[test]
-    fn default_persistence_root() {
+    fn default_persistence_is_json_file() {
         let c = Config::default();
-        assert_eq!(c.persistence.root, "./data");
-        assert_eq!(c.persistence.flush_interval_ms, 5000);
+        match c.persistence.backend {
+            PersistenceBackendConfig::JsonFile { ref root, .. } => assert_eq!(root, "./data"),
+            _ => panic!("expected json_file default"),
+        }
     }
 
     #[test]
@@ -119,7 +107,8 @@ mod tests {
         let toml_str = r#"
             [server]
             bind = "127.0.0.1:9000"
-            [persistence]
+            [persistence.backend]
+            kind = "json_file"
             root = "/tmp/loon"
             flush_interval_ms = 1000
             [nlp]
@@ -129,10 +118,42 @@ mod tests {
         "#;
         let c: Config = toml::from_str(toml_str).expect("parse");
         assert_eq!(c.server.bind, "127.0.0.1:9000");
-        assert_eq!(c.persistence.root, "/tmp/loon");
-        assert_eq!(c.persistence.flush_interval_ms, 1000);
+        match c.persistence.backend {
+            PersistenceBackendConfig::JsonFile {
+                ref root,
+                ref flush_interval_ms,
+            } => {
+                assert_eq!(root, "/tmp/loon");
+                assert_eq!(*flush_interval_ms, 1000);
+            }
+            _ => panic!("expected json_file"),
+        }
         assert_eq!(c.nlp.model, "gpt-4");
         assert_eq!(c.nlp.max_retries, 5);
         assert_eq!(c.nlp.timeout_ms, 30000);
+    }
+
+    #[test]
+    fn parse_mongo_toml() {
+        let toml_str = r#"
+            [server]
+            bind = "0.0.0.0:8800"
+            [persistence.backend]
+            kind = "mongo"
+            uri = "mongodb://localhost:27017"
+            database = "loon"
+            [nlp]
+            model = "gpt-4o-mini"
+            max_retries = 3
+            timeout_ms = 60000
+        "#;
+        let c: Config = toml::from_str(toml_str).expect("parse");
+        match c.persistence.backend {
+            PersistenceBackendConfig::Mongo { ref uri, ref database } => {
+                assert_eq!(uri, "mongodb://localhost:27017");
+                assert_eq!(database, "loon");
+            }
+            _ => panic!("expected mongo"),
+        }
     }
 }

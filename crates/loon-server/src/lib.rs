@@ -19,17 +19,10 @@ pub use config::*;
 /// config. The server is started on the bind address from
 /// [`Config::load`] and runs until axum exits.
 pub async fn run() -> anyhow::Result<()> {
-    use std::path::Path;
     use std::sync::Arc;
     use std::time::Duration;
 
     let config = crate::config::Config::load()?;
-    let db = Arc::new(
-        loon_persistence::backends::json_file::JsonFileDocumentDatabase::new(
-            Path::new(&config.persistence.root),
-            Duration::from_millis(config.persistence.flush_interval_ms),
-        )?,
-    );
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
     std::env::remove_var("OPENAI_API_KEY");
 
@@ -45,11 +38,20 @@ pub async fn run() -> anyhow::Result<()> {
     let nlp: Arc<dyn loon_nlp::NlpService> = Arc::new(
         loon_nlp::providers::openai_provider::OpenAiProvider::new(nlp_config),
     );
-    let server = loon_sdk::Server::builder()
-        .with_document_db(db)
-        .with_nlp_service(nlp)
-        .build()
-        .await?;
+
+    let server = match &config.persistence.backend {
+        loon_persistence::PersistenceBackendConfig::JsonFile { root, flush_interval_ms } => {
+            let db = Arc::new(loon_persistence::backends::json_file::JsonFileDocumentDatabase::new(
+                std::path::Path::new(root),
+                Duration::from_millis(*flush_interval_ms),
+            )?);
+            loon_sdk::Server::builder().with_document_db(db).with_nlp_service(nlp.clone()).build().await?
+        }
+        loon_persistence::PersistenceBackendConfig::Mongo { uri, database } => {
+            let db = Arc::new(loon_persistence::backends::mongodb::MongoDocumentDatabase::connect(uri, database).await?);
+            loon_sdk::Server::builder().with_document_db(db).with_nlp_service(nlp.clone()).build().await?
+        }
+    };
     let app_state = std::sync::Arc::new(crate::app::AppState {
         server: std::sync::Arc::new(server),
     });
