@@ -7,6 +7,7 @@ pub mod embedding;
 pub mod moderation;
 pub mod tokenization;
 pub mod service;
+pub mod fallback;
 pub mod providers;
 pub mod macros;
 
@@ -18,4 +19,5 @@ pub use embedding::*;
 pub use moderation::*;
 pub use tokenization::*;
 pub use service::*;
+pub use fallback::*;
 pub use macros::JsonSchema;
