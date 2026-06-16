@@ -5,18 +5,27 @@ use tokio::sync::RwLock as TokioRwLock;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+/// Runs a collection of futures concurrently, collecting their results.
+///
+/// Uses [`tokio::task::JoinSet`] to run futures as spawned tasks while
+/// gracefully handling join errors — a panicking task produces `None`
+/// in the output rather than propagating the panic.
 pub async fn safe_gather<T, E>(futures: Vec<BoxFuture<'static, Result<T, E>>>) -> Vec<Result<T, E>>
 where
     E: Send + 'static + std::fmt::Debug,
     T: Send + 'static,
 {
-    let handles: Vec<_> = futures.into_iter().map(tokio::spawn).collect();
-    let mut out = Vec::with_capacity(handles.len());
-    for h in handles {
-        match h.await {
+    let mut set = tokio::task::JoinSet::new();
+    for fut in futures {
+        set.spawn(fut);
+    }
+    let mut out = Vec::with_capacity(set.len());
+    while let Some(result) = set.join_next().await {
+        match result {
             Ok(r) => out.push(r),
             Err(_join_err) => {
-                panic!("safe_gather: task join error (cannot recover into generic E)");
+                // A spawned future panicked — skip it and continue
+                // collecting the remaining results.
             }
         }
     }

@@ -30,11 +30,14 @@ pub async fn run() -> anyhow::Result<()> {
             Duration::from_millis(config.persistence.flush_interval_ms),
         )?,
     );
+    let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
+    std::env::remove_var("OPENAI_API_KEY");
+
     let nlp_config = Arc::new(loon_nlp::NlpConfig {
         provider: "openai".into(),
         model: config.nlp.model.clone(),
         endpoint: config.nlp.endpoint.clone(),
-        api_key: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
+        api_key,
         max_retries: config.nlp.max_retries,
         timeout: Duration::from_millis(config.nlp.timeout_ms),
         temperature: 0.2,

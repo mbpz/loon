@@ -81,7 +81,7 @@ fn load_all_from_dir<T: Document>(
         let bytes = std::fs::read(&path)?;
         let base: BaseDocument = serde_json::from_slice(&bytes)?;
         if let Some(doc) = loader(&base) {
-            let key = serde_json::to_string(doc.id())?;
+            let key = doc.id().to_string();
             map.insert(key, doc);
         }
     }
@@ -100,7 +100,7 @@ pub struct JsonFileCollection<T: Document> {
 #[async_trait]
 impl<T: Document + 'static> DocumentCollection<T> for JsonFileCollection<T> {
     async fn insert_one(&self, doc: T) -> PersistenceResult<InsertResult> {
-        let key = serde_json::to_string(doc.id())?;
+        let key = doc.id().to_string();
         let path = self.dir.join(format!("{}.json", sanitize(&key)));
         let bytes = serde_json::to_vec(&doc)?;
         atomic_write(&path, &bytes)?;
@@ -138,7 +138,7 @@ impl<T: Document + 'static> DocumentCollection<T> for JsonFileCollection<T> {
                     if let Ok(new_doc) = serde_json::from_value::<T>(value) {
                         *v = new_doc;
                         modified += 1;
-                        let key = serde_json::to_string(v.id())?;
+                        let key = v.id().to_string();
                         let path = self.dir.join(format!("{}.json", sanitize(&key)));
                         let bytes = serde_json::to_vec(&*v)?;
                         atomic_write(&path, &bytes)?;
@@ -208,6 +208,8 @@ fn matches_filter<T: Document>(doc: &T, filter: &DocumentFilter) -> bool {
         DocumentFilter::Eq { field, value } => field_value(doc, field) == *value,
         DocumentFilter::In { field, values } => values.contains(&field_value(doc, field)),
         DocumentFilter::And(fs) => fs.iter().all(|f| matches_filter(doc, f)),
+        // NOTE: empty `Or` matches nothing (vacuous false for `any`),
+        // while empty `And` matches everything (vacuous true for `all`).
         DocumentFilter::Or(fs) => fs.iter().any(|f| matches_filter(doc, f)),
         DocumentFilter::Not(f) => !matches_filter(doc, f),
     }

@@ -41,6 +41,31 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/v1/relationships",
             get(crate::routes::relationships::list_relationships),
         )
+        // ---- Phase 1 stubs (return 501 NOT_IMPLEMENTED) ----
+        .route(
+            "/v1/canned-responses",
+            get(crate::routes::canned_responses::list_canned_responses)
+                .post(crate::routes::canned_responses::create_canned_response),
+        )
+        .route(
+            "/v1/glossary",
+            get(crate::routes::glossary::list_glossary),
+        )
+        .route(
+            "/v1/journeys",
+            get(crate::routes::journeys::list_journeys)
+                .post(crate::routes::journeys::create_journey),
+        )
+        .route(
+            "/v1/observations",
+            get(crate::routes::observations::list_observations)
+                .post(crate::routes::observations::create_observation),
+        )
+        .route(
+            "/v1/tools",
+            get(crate::routes::tools::list_tools),
+        )
+        // ---- end Phase 1 stubs ----
         .route("/v1/sessions/{id}/chat", get(crate::routes::chat::chat_ws))
         .with_state(state)
 }

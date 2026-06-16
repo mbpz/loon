@@ -10,7 +10,7 @@ pub type DocumentLoader<T> = std::sync::Arc<dyn Fn(&BaseDocument) -> Option<T> +
 
 pub trait Document: Serialize + DeserializeOwned + Send + Sync + Clone + 'static {
     const VERSION: &'static str;
-    type Id: Serialize + DeserializeOwned + Send + Sync + Eq + Hash;
+    type Id: Serialize + DeserializeOwned + Send + Sync + Eq + Hash + std::fmt::Display;
     fn id(&self) -> &Self::Id;
     fn to_base_document(&self) -> Result<BaseDocument, crate::error::PersistenceError> {
         Ok(serde_json::to_value(self)?)
