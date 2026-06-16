@@ -1,4 +1,10 @@
 //! Core domain types for loon.
+//!
+//! Stage 1 complete: 15 entities (agent, tag, customer, guideline, journey,
+//! observation, session, tool, glossary, variable, canned_response,
+//! capability, retriever, relationship, shot), all store traits, and CQ
+//! (`EntityQueries` / `EntityCommands`) are exported from the crate root
+//! so downstream crates can write `use loon_core::*;`.
 pub mod agent;
 pub mod async_utils;
 pub mod basic_tracer;
