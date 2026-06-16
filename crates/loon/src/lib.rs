@@ -240,4 +240,77 @@ mod tests {
             Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>,
         > = || Box::pin(loon_server::run());
     }
+
+    #[test]
+    fn cli_agent_list_parses() {
+        let cli = Cli::try_parse_from(&["loon", "agent", "list"]).expect("parse");
+        match cli.cmd {
+            Cmd::Agent {
+                action: AgentCmd::List { server },
+            } => assert_eq!(server, "http://localhost:8800"),
+            _ => panic!("expected Agent::List"),
+        }
+    }
+
+    #[test]
+    fn cli_guideline_list_parses() {
+        let cli = Cli::try_parse_from(&["loon", "guideline", "list"]).expect("parse");
+        match cli.cmd {
+            Cmd::Guideline {
+                action: GuidelineCmd::List { server },
+            } => assert_eq!(server, "http://localhost:8800"),
+            _ => panic!("expected Guideline::List"),
+        }
+    }
+
+    #[test]
+    fn cli_session_create_parses() {
+        let cli = Cli::try_parse_from(&[
+            "loon", "session", "create", "--agent", "agent-1", "--server", "http://h:1",
+        ])
+        .expect("parse");
+        match cli.cmd {
+            Cmd::Session {
+                action: SessionCmd::Create { agent, server },
+            } => {
+                assert_eq!(agent, "agent-1");
+                assert_eq!(server, "http://h:1");
+            }
+            _ => panic!("expected Session::Create"),
+        }
+    }
+
+    #[test]
+    fn cli_journey_create_parses() {
+        let cli = Cli::try_parse_from(&[
+            "loon", "journey", "create", "--agent", "agent-1", "--server", "http://h:2",
+        ])
+        .expect("parse");
+        match cli.cmd {
+            Cmd::Journey {
+                action: JourneyCmd::Create { agent, server },
+            } => {
+                assert_eq!(agent, "agent-1");
+                assert_eq!(server, "http://h:2");
+            }
+            _ => panic!("expected Journey::Create"),
+        }
+    }
+
+    #[test]
+    fn cli_tool_create_parses() {
+        let cli = Cli::try_parse_from(&[
+            "loon", "tool", "create", "--agent", "agent-1", "--server", "http://h:3",
+        ])
+        .expect("parse");
+        match cli.cmd {
+            Cmd::Tool {
+                action: ToolCmd::Create { agent, server },
+            } => {
+                assert_eq!(agent, "agent-1");
+                assert_eq!(server, "http://h:3");
+            }
+            _ => panic!("expected Tool::Create"),
+        }
+    }
 }
