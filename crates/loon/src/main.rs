@@ -1,3 +1,10 @@
-fn main() {
-    println!("loon-server placeholder");
+//! `loon` CLI binary entry point.
+
+use clap::Parser;
+
+use loon::Cli;
+
+fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+    loon::run(cli)
 }
