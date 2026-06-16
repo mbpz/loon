@@ -1,4 +1,5 @@
 //! Core domain types for loon.
+pub mod agent;
 pub mod common;
 pub mod error;
 pub mod id_generator;
@@ -10,4 +11,5 @@ pub use common::*;
 pub use error::*;
 pub use id_generator::*;
 pub use ids::*;
+pub use agent::*;
 pub use tag::*;
