@@ -23,6 +23,7 @@ where
     out
 }
 
+#[derive(Clone, Copy)]
 pub struct Stopwatch {
     start: Instant,
 }
