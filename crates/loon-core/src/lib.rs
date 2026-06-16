@@ -2,6 +2,7 @@
 pub mod agent;
 pub mod common;
 pub mod error;
+pub mod guideline;
 pub mod id_generator;
 pub mod ids;
 pub mod macros;
@@ -13,3 +14,4 @@ pub use id_generator::*;
 pub use ids::*;
 pub use agent::*;
 pub use tag::*;
+pub use guideline::*;
