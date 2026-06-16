@@ -13,4 +13,10 @@ pub enum EmissionError {
     Core(#[from] CoreError),
 }
 
+impl From<serde_json::Error> for EmissionError {
+    fn from(e: serde_json::Error) -> Self {
+        EmissionError::Serialization(e.to_string())
+    }
+}
+
 pub type EmissionResult<T> = Result<T, EmissionError>;

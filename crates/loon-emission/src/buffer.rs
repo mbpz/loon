@@ -19,12 +19,6 @@ impl EventBuffer {
     }
 }
 
-impl From<serde_json::Error> for EmissionError {
-    fn from(e: serde_json::Error) -> Self {
-        EmissionError::Serialization(e.to_string())
-    }
-}
-
 #[async_trait]
 impl EventEmitter for EventBuffer {
     async fn emit_status_event(
@@ -138,7 +132,7 @@ impl EventEmitterFactory for EventBufferFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loon_core::{Agent, StatusEventData, ToolEventData, ToolCallData, MessageEventData};
+    use loon_core::{Agent, StatusEventData, ToolEventData, ToolCallData};
 
     #[tokio::test]
     async fn buffer_collects_all_event_kinds() {

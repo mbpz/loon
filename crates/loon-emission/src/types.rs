@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use loon_core::{EventSource, EventKind, MessageEventData, JsonValue, StatusEventData, ToolEventData};
+use loon_core::{EventSource, EventKind, MessageEventData, JsonValue};
 use loon_core::async_utils::BoxFuture;
 
 #[derive(Debug, Clone)]
