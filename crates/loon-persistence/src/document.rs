@@ -8,7 +8,7 @@ use crate::filter::DocumentFilter;
 pub type BaseDocument = JsonValue;
 pub type DocumentLoader<T> = std::sync::Arc<dyn Fn(&BaseDocument) -> Option<T> + Send + Sync>;
 
-pub trait Document: Serialize + DeserializeOwned + Send + Sync + 'static {
+pub trait Document: Serialize + DeserializeOwned + Send + Sync + Clone + 'static {
     const VERSION: &'static str;
     type Id: Serialize + DeserializeOwned + Send + Sync + Eq + Hash;
     fn id(&self) -> &Self::Id;
@@ -92,7 +92,7 @@ pub trait DocumentCollection<TDocument: Document>: Send + Sync {
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
     struct TestDoc {
         id: String,
         name: String,
