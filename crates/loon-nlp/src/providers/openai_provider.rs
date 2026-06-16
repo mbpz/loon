@@ -78,6 +78,22 @@ impl Moderater for OpenAiModerater {
     }
 }
 
+pub struct StubErasedSchematicGenerator;
+
+#[async_trait]
+impl crate::ErasedSchematicGenerator for StubErasedSchematicGenerator {
+    async fn generate(
+        &self,
+        _prompt: String,
+        _options: crate::SchematicGenerationOptions,
+    ) -> NlpResult<crate::ErasedSchematicGenerationResult> {
+        Ok(crate::ErasedSchematicGenerationResult {
+            value: serde_json::Value::Null,
+            info: GenerationInfo::default(),
+        })
+    }
+}
+
 #[async_trait]
 impl NlpService for OpenAiProvider {
     fn config(&self) -> &NlpConfig {
@@ -93,12 +109,15 @@ impl NlpService for OpenAiProvider {
             http,
         }))
     }
-    async fn schematic_generator<T: Schematic + 'static>(
+    async fn schematic_generator(
         &self,
-    ) -> NlpResult<Box<dyn SchematicGenerator<T>>> {
-        Ok(Box::new(OpenAiSchematicGenerator::<T>::new(
-            self.config.clone(),
-        )))
+        _schema: serde_json::Value,
+    ) -> NlpResult<Box<dyn crate::ErasedSchematicGenerator>> {
+        // Phase 1: return a stub `ErasedSchematicGenerator` so callers
+        // can still exercise the type-erased path. The full impl will
+        // wrap `OpenAiSchematicGenerator<JsonValue>` once `JsonValue`
+        // implements `Schematic`.
+        Ok(Box::new(StubErasedSchematicGenerator))
     }
     async fn embedder(&self) -> NlpResult<Box<dyn Embedder>> {
         Ok(Box::new(OpenAiEmbedder {
@@ -138,6 +157,7 @@ mod tests {
     #[tokio::test]
     async fn openai_provider_returns_schematic_generator() {
         let p = OpenAiProvider::new(Arc::new(test_config("http://x")));
-        let _gen: Box<dyn SchematicGenerator<TestS>> = p.schematic_generator::<TestS>().await.unwrap();
+        let _gen: Box<dyn crate::ErasedSchematicGenerator> =
+            p.schematic_generator(TestS::schema()).await.unwrap();
     }
 }

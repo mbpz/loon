@@ -109,10 +109,11 @@ impl NlpService for FakeNlpService {
     async fn text_generator(&self) -> NlpResult<Box<dyn StreamingTextGenerator>> {
         Ok(Box::new(FakeTextGen))
     }
-    async fn schematic_generator<T: Schematic + Default + 'static>(
+    async fn schematic_generator(
         &self,
-    ) -> NlpResult<Box<dyn SchematicGenerator<T>>> {
-        Ok(Box::new(EchoSchematicGenerator))
+        _schema: serde_json::Value,
+    ) -> NlpResult<Box<dyn crate::ErasedSchematicGenerator>> {
+        Ok(Box::new(EchoErasedSchematicGenerator))
     }
     async fn embedder(&self) -> NlpResult<Box<dyn Embedder>> {
         Ok(Box::new(FakeEmbedder))
@@ -122,6 +123,22 @@ impl NlpService for FakeNlpService {
     }
     async fn moderater(&self) -> NlpResult<Box<dyn Moderater>> {
         Ok(Box::new(FakeModerater))
+    }
+}
+
+/// Always returns `serde_json::Value::Null`.
+pub struct EchoErasedSchematicGenerator;
+#[async_trait]
+impl crate::ErasedSchematicGenerator for EchoErasedSchematicGenerator {
+    async fn generate(
+        &self,
+        _prompt: String,
+        _options: crate::SchematicGenerationOptions,
+    ) -> NlpResult<crate::ErasedSchematicGenerationResult> {
+        Ok(crate::ErasedSchematicGenerationResult {
+            value: serde_json::Value::Null,
+            info: GenerationInfo::default(),
+        })
     }
 }
 
@@ -147,8 +164,12 @@ mod tests {
     #[tokio::test]
     async fn fake_nlp_provides_schematic_generator() {
         let s = FakeNlpService::new();
-        let gen: Box<dyn SchematicGenerator<Tiny>> = s.schematic_generator().await.unwrap();
-        let r = gen.generate("p".into(), SchematicGenerationOptions::default()).await.unwrap();
-        assert_eq!(r.value.a, "");
+        let gen: Box<dyn crate::ErasedSchematicGenerator> =
+            s.schematic_generator(Tiny::schema()).await.unwrap();
+        let r = gen
+            .generate("p".into(), SchematicGenerationOptions::default())
+            .await
+            .unwrap();
+        assert_eq!(r.value, serde_json::Value::Null);
     }
 }
