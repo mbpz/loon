@@ -12,6 +12,22 @@ members = [
     "crates/loon",
 ]
 
+[package]
+name = "loon-workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dev-dependencies]
+loon-sdk = { path = "crates/loon-sdk" }
+loon-core = { path = "crates/loon-core" }
+loon-persistence = { path = "crates/loon-persistence" }
+loon-nlp = { path = "crates/loon-nlp" }
+tokio = { workspace = true }
+tempfile = "3"
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
