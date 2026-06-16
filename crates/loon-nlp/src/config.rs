@@ -10,7 +10,7 @@ pub enum Provider {
 }
 
 impl Provider {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "openai" => Some(Self::OpenAI),
             "anthropic" | "claude" => Some(Self::Anthropic),
@@ -73,13 +73,13 @@ mod tests {
 
     #[test]
     fn provider_from_str_recognises_aliases() {
-        assert_eq!(Provider::from_str("openai"), Some(Provider::OpenAI));
-        assert_eq!(Provider::from_str("OpenAI"), Some(Provider::OpenAI));
-        assert_eq!(Provider::from_str("anthropic"), Some(Provider::Anthropic));
-        assert_eq!(Provider::from_str("claude"), Some(Provider::Anthropic));
-        assert_eq!(Provider::from_str("gemini"), Some(Provider::Gemini));
-        assert_eq!(Provider::from_str("google"), Some(Provider::Gemini));
-        assert_eq!(Provider::from_str("nope"), None);
+        assert_eq!(Provider::parse("openai"), Some(Provider::OpenAI));
+        assert_eq!(Provider::parse("OpenAI"), Some(Provider::OpenAI));
+        assert_eq!(Provider::parse("anthropic"), Some(Provider::Anthropic));
+        assert_eq!(Provider::parse("claude"), Some(Provider::Anthropic));
+        assert_eq!(Provider::parse("gemini"), Some(Provider::Gemini));
+        assert_eq!(Provider::parse("google"), Some(Provider::Gemini));
+        assert_eq!(Provider::parse("nope"), None);
     }
 
     #[test]

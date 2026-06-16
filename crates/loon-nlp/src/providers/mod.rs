@@ -36,7 +36,7 @@ impl MultiProvider {
     }
 
     pub fn provider_kind(&self) -> Provider {
-        Provider::from_str(&self.config.provider).unwrap_or(Provider::OpenAI)
+        Provider::parse(&self.config.provider).unwrap_or(Provider::OpenAI)
     }
 
     fn build_http(&self) -> NlpResult<reqwest::Client> {
