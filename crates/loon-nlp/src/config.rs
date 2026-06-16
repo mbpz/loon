@@ -2,6 +2,38 @@ use std::time::Duration;
 
 use crate::error::NlpError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Provider {
+    OpenAI,
+    Anthropic,
+    Gemini,
+}
+
+impl Provider {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "openai" => Some(Self::OpenAI),
+            "anthropic" | "claude" => Some(Self::Anthropic),
+            "gemini" | "google" => Some(Self::Gemini),
+            _ => None,
+        }
+    }
+    pub fn default_model(&self) -> &'static str {
+        match self {
+            Self::OpenAI => "gpt-4o-mini",
+            Self::Anthropic => "claude-3-5-sonnet-20241022",
+            Self::Gemini => "gemini-1.5-flash",
+        }
+    }
+    pub fn default_endpoint(&self) -> &'static str {
+        match self {
+            Self::OpenAI => "https://api.openai.com",
+            Self::Anthropic => "https://api.anthropic.com",
+            Self::Gemini => "https://generativelanguage.googleapis.com",
+        }
+    }
+}
+
 pub struct NlpConfig {
     pub provider: String,
     pub model: String,
@@ -37,5 +69,32 @@ mod tests {
         std::env::remove_var("OPENAI_API_KEY");
         let result = NlpConfig::from_env();
         assert!(matches!(result, Err(NlpError::Config(_))));
+    }
+
+    #[test]
+    fn provider_from_str_recognises_aliases() {
+        assert_eq!(Provider::from_str("openai"), Some(Provider::OpenAI));
+        assert_eq!(Provider::from_str("OpenAI"), Some(Provider::OpenAI));
+        assert_eq!(Provider::from_str("anthropic"), Some(Provider::Anthropic));
+        assert_eq!(Provider::from_str("claude"), Some(Provider::Anthropic));
+        assert_eq!(Provider::from_str("gemini"), Some(Provider::Gemini));
+        assert_eq!(Provider::from_str("google"), Some(Provider::Gemini));
+        assert_eq!(Provider::from_str("nope"), None);
+    }
+
+    #[test]
+    fn provider_defaults_match() {
+        assert_eq!(Provider::OpenAI.default_model(), "gpt-4o-mini");
+        assert_eq!(Provider::Anthropic.default_model(), "claude-3-5-sonnet-20241022");
+        assert_eq!(Provider::Gemini.default_model(), "gemini-1.5-flash");
+        assert_eq!(Provider::OpenAI.default_endpoint(), "https://api.openai.com");
+        assert_eq!(
+            Provider::Anthropic.default_endpoint(),
+            "https://api.anthropic.com"
+        );
+        assert_eq!(
+            Provider::Gemini.default_endpoint(),
+            "https://generativelanguage.googleapis.com"
+        );
     }
 }
