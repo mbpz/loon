@@ -123,4 +123,26 @@ mod tests {
         assert_eq!(c.server.bind, "0.0.0.0:8800");
         std::env::remove_var("LOON_CONFIG");
     }
+
+    #[test]
+    fn parse_minimal_toml() {
+        let toml_str = r#"
+            [server]
+            bind = "127.0.0.1:9000"
+            [persistence]
+            root = "/tmp/loon"
+            flush_interval_ms = 1000
+            [nlp]
+            model = "gpt-4"
+            max_retries = 5
+            timeout_ms = 30000
+        "#;
+        let c: Config = toml::from_str(toml_str).expect("parse");
+        assert_eq!(c.server.bind, "127.0.0.1:9000");
+        assert_eq!(c.persistence.root, "/tmp/loon");
+        assert_eq!(c.persistence.flush_interval_ms, 1000);
+        assert_eq!(c.nlp.model, "gpt-4");
+        assert_eq!(c.nlp.max_retries, 5);
+        assert_eq!(c.nlp.timeout_ms, 30000);
+    }
 }
