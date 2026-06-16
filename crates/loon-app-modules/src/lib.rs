@@ -2,3 +2,4 @@
 //! high-level CRUD APIs used by the engine, CLI, and SDK layers.
 pub mod agents;
 pub mod guidelines;
+pub mod journeys;
