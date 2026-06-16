@@ -19,6 +19,7 @@ define_id!(EventId);
 define_id!(MessageId);
 define_id!(GuidelineToolAssociationId);
 define_id!(ShotId);
+define_id!(EvaluationId);
 
 #[cfg(test)]
 mod tests {
