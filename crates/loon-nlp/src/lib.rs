@@ -2,9 +2,11 @@
 pub mod error;
 pub mod config;
 pub mod schematic;
+pub mod generator;
 pub mod macros;
 
 pub use error::*;
 pub use config::*;
 pub use schematic::*;
+pub use generator::*;
 pub use macros::JsonSchema;
