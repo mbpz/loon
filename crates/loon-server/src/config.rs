@@ -1,0 +1,1 @@
+//! Stub config — fleshed out in Task 8.2.

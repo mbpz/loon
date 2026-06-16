@@ -7,3 +7,32 @@ license.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+loon-core = { path = "../loon-core" }
+loon-emission = { path = "../loon-emission" }
+loon-persistence = { path = "../loon-persistence" }
+loon-nlp = { path = "../loon-nlp" }
+loon-engine = { path = "../loon-engine" }
+loon-app-modules = { path = "../loon-app-modules" }
+loon-sdk = { path = "../loon-sdk" }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+toml = { workspace = true }
+dotenvy = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = "0.3"
+clap = { workspace = true }
+dialoguer = { workspace = true }
+console = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
