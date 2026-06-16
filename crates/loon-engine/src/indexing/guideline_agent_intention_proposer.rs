@@ -9,11 +9,7 @@ use crate::error::EngineResult;
 
 #[async_trait]
 pub trait GuidelineAgentIntentionProposer: Send + Sync {
-    async fn propose(
-        &self,
-        _agent_id: &AgentId,
-        _intention: &str,
-    ) -> EngineResult<Vec<Guideline>> {
+    async fn propose(&self, _agent_id: &AgentId, _intention: &str) -> EngineResult<Vec<Guideline>> {
         Ok(vec![])
     }
 }
@@ -32,7 +28,7 @@ mod tests {
     #[tokio::test]
     async fn noop_proposer_returns_empty() {
         let p = NoopGuidelineAgentIntentionProposer;
-        let _ = _accepts(&p);
+        _accepts(&p);
         let res = p.propose(&AgentId::new(), "intention").await.unwrap();
         assert!(res.is_empty());
         let _: Vec<Guideline> = vec![];

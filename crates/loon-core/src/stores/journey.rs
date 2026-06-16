@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::{AgentId, CoreResult, Journey, JourneyId, JourneyUpdateParams};
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait JourneyStore: Send + Sync {

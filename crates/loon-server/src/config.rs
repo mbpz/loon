@@ -6,21 +6,11 @@ use anyhow::Context;
 use serde::Deserialize;
 
 /// Top-level configuration tree for `loon-server`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Config {
     pub server: ServerConfig,
     pub persistence: PersistenceConfig,
     pub nlp: NlpSection,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            persistence: PersistenceConfig::default(),
-            nlp: NlpSection::default(),
-        }
-    }
 }
 
 /// `[server]` section.

@@ -54,7 +54,10 @@ mod tests {
 
     #[test]
     fn utterance_request_constructs() {
-        let r = UtteranceRequest { action: "say hi".into(), rationale: "ack".into() };
+        let r = UtteranceRequest {
+            action: "say hi".into(),
+            rationale: "ack".into(),
+        };
         assert_eq!(r.action, "say hi");
     }
 

@@ -21,21 +21,21 @@ pub use server::*;
 // already covers the entity modules; the explicit `pub use`s below
 // document which entity surfaces are considered the public SDK
 // contract (and let us add aliases later without touching the glob).
-pub use loon_core::*;
 pub use loon_core::agent as agent_handle;
+pub use loon_core::canned_response as canned_response_handle;
+pub use loon_core::capability as capability_handle;
+pub use loon_core::customer as customer_handle;
+pub use loon_core::glossary as glossary_handle;
 pub use loon_core::guideline as guideline_handle;
 pub use loon_core::journey as journey_handle;
 pub use loon_core::observation as observation_handle;
-pub use loon_core::tool as tool_handle;
-pub use loon_core::session as session_handle;
-pub use loon_core::customer as customer_handle;
-pub use loon_core::glossary as glossary_handle;
-pub use loon_core::variable as context_variables;
-pub use loon_core::canned_response as canned_response_handle;
-pub use loon_core::capability as capability_handle;
 pub use loon_core::relationship as relationship_handle;
-pub use loon_core::tag as tag_handle;
+pub use loon_core::session as session_handle;
 pub use loon_core::shot as shot_handle;
+pub use loon_core::tag as tag_handle;
+pub use loon_core::tool as tool_handle;
+pub use loon_core::variable as context_variables;
+pub use loon_core::*;
 
 /// Built-in guideline matcher constant: the well-known "always"
 /// token used by `GuidelineMatcher` strategies to mark a guideline

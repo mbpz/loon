@@ -1,5 +1,5 @@
+use crate::{Agent, AgentId, AgentUpdateParams, CoreResult, TagId};
 use async_trait::async_trait;
-use crate::{Agent, AgentId, TagId, CoreResult, AgentUpdateParams};
 
 #[async_trait]
 pub trait AgentStore: Send + Sync {

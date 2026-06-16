@@ -11,18 +11,12 @@ use loon_sdk::Tool;
 pub async fn list_tools(
     State(_s): State<Arc<AppState>>,
 ) -> Result<Json<ApiListResponse<Tool>>, ApiError> {
-    Err(ApiError::NotFound(
-        "tools".into(),
-        "NOT_IMPLEMENTED".into(),
-    ))
+    Err(ApiError::NotFound("tools".into(), "NOT_IMPLEMENTED".into()))
 }
 
 pub async fn create_tool(
     State(_s): State<Arc<AppState>>,
     Json(_req): Json<serde_json::Value>,
 ) -> Result<Json<ApiResponse<Tool>>, ApiError> {
-    Err(ApiError::NotFound(
-        "tools".into(),
-        "NOT_IMPLEMENTED".into(),
-    ))
+    Err(ApiError::NotFound("tools".into(), "NOT_IMPLEMENTED".into()))
 }

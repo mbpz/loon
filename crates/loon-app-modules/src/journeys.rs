@@ -3,9 +3,7 @@
 use std::sync::Arc;
 
 use loon_core::stores::JourneyStore;
-use loon_core::{
-    AgentId, CoreResult, Journey, JourneyId, JourneyNode, JourneyUpdateParams,
-};
+use loon_core::{AgentId, CoreResult, Journey, JourneyId, JourneyNode, JourneyUpdateParams};
 
 #[derive(Debug, Clone)]
 pub struct JourneyCreateParams {
@@ -85,11 +83,7 @@ mod tests {
         async fn read(&self, id: &JourneyId) -> CoreResult<Option<Journey>> {
             Ok(self.data.lock().get(id).cloned())
         }
-        async fn update(
-            &self,
-            id: &JourneyId,
-            p: JourneyUpdateParams,
-        ) -> CoreResult<Journey> {
+        async fn update(&self, id: &JourneyId, p: JourneyUpdateParams) -> CoreResult<Journey> {
             let mut g = self.data.lock();
             let j = g.get_mut(id).unwrap();
             if let Some(t) = p.title {

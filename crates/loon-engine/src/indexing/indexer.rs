@@ -45,7 +45,7 @@ mod tests {
             0,
         );
         let idx = NoopIndexer;
-        let _ = _accepts(&idx);
+        _accepts(&idx);
         idx.index(&g).await.unwrap();
         // Ensure Criticality stays in scope to avoid unused-import warnings.
         let _c: Criticality = Criticality::Low;

@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 
-use loon_core::{AgentId, Guideline, GuidelineContent};
+use loon_core::Guideline;
 
 use crate::error::EngineResult;
 
@@ -22,13 +22,14 @@ impl CustomerDependentActionDetector for NoopCustomerDependentActionDetector {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use loon_core::{AgentId, GuidelineContent};
 
     fn _accepts(_: &dyn CustomerDependentActionDetector) {}
 
     #[tokio::test]
     async fn noop_detector_returns_false() {
         let d = NoopCustomerDependentActionDetector;
-        let _ = _accepts(&d);
+        _accepts(&d);
         let g = Guideline::new(
             GuidelineContent {
                 condition: "c".into(),

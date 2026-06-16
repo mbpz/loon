@@ -1,8 +1,8 @@
+use crate::AgentId;
+use crate::TagId;
+use crate::{CapabilityId, RetrieverId};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::{CapabilityId, RetrieverId};
-use crate::TagId;
-use crate::AgentId;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Capability {
@@ -15,7 +15,11 @@ pub struct Capability {
 }
 
 impl Capability {
-    pub fn new(agent_id: &AgentId, name: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn new(
+        agent_id: &AgentId,
+        name: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         Self {
             id: CapabilityId::new(),
             agent_id: agent_id.clone(),

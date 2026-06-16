@@ -26,7 +26,9 @@ mod tests {
 
     #[test]
     fn nlp_error_renders_messages() {
-        let e = NlpError::RateLimited { retry_after_ms: 1000 };
+        let e = NlpError::RateLimited {
+            retry_after_ms: 1000,
+        };
         assert_eq!(e.to_string(), "rate limited (retry after 1000ms)");
         let e = NlpError::InvalidSchema("bad".into());
         assert_eq!(e.to_string(), "invalid schema: bad");

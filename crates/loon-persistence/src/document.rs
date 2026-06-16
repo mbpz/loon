@@ -1,9 +1,9 @@
-use async_trait::async_trait;
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::Value as JsonValue;
-use std::hash::Hash;
 use crate::error::PersistenceResult;
 use crate::filter::DocumentFilter;
+use async_trait::async_trait;
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::Value as JsonValue;
+use std::hash::Hash;
 
 pub type BaseDocument = JsonValue;
 pub type DocumentLoader<T> = std::sync::Arc<dyn Fn(&BaseDocument) -> Option<T> + Send + Sync>;

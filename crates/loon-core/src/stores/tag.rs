@@ -1,5 +1,5 @@
+use crate::{CoreResult, Tag, TagId};
 use async_trait::async_trait;
-use crate::{Tag, TagId, CoreResult};
 
 #[async_trait]
 pub trait TagStore: Send + Sync {

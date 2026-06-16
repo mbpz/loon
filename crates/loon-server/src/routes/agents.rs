@@ -11,12 +11,18 @@ use loon_sdk::Agent;
 pub async fn list_agents(
     State(_s): State<Arc<AppState>>,
 ) -> Result<Json<ApiListResponse<Agent>>, ApiError> {
-    Err(ApiError::NotFound("agents".into(), "NOT_IMPLEMENTED".into()))
+    Err(ApiError::NotFound(
+        "agents".into(),
+        "NOT_IMPLEMENTED".into(),
+    ))
 }
 
 pub async fn create_agent(
     State(_s): State<Arc<AppState>>,
     Json(_req): Json<serde_json::Value>,
 ) -> Result<Json<ApiResponse<Agent>>, ApiError> {
-    Err(ApiError::NotFound("agents".into(), "NOT_IMPLEMENTED".into()))
+    Err(ApiError::NotFound(
+        "agents".into(),
+        "NOT_IMPLEMENTED".into(),
+    ))
 }

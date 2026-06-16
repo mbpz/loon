@@ -6,11 +6,19 @@ macro_rules! define_id {
         pub struct $name(pub String);
 
         impl $name {
-            pub fn new() -> Self { Self($crate::UniqueId::new().0) }
-            pub fn as_str(&self) -> &str { &self.0 }
+            pub fn new() -> Self {
+                Self($crate::UniqueId::new().0)
+            }
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
         }
 
-        impl Default for $name { fn default() -> Self { Self::new() } }
+        impl Default for $name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -19,8 +27,14 @@ macro_rules! define_id {
         }
 
         impl From<&str> for $name {
-            fn from(s: &str) -> Self { Self(s.to_string()) }
+            fn from(s: &str) -> Self {
+                Self(s.to_string())
+            }
         }
-        impl From<String> for $name { fn from(s: String) -> Self { Self(s) } }
+        impl From<String> for $name {
+            fn from(s: String) -> Self {
+                Self(s)
+            }
+        }
     };
 }

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::JsonValue;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {

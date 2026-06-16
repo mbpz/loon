@@ -3,8 +3,8 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::{CoreResult, JsonValue, Tool, ToolId, ToolResult};
 use crate::async_utils::BoxFuture;
+use crate::{CoreResult, JsonValue, Tool, ToolId, ToolResult};
 
 /// Abstraction for invoking a tool by id. Implementations may dispatch
 /// to in-process handlers, remote MCP servers, or OpenAPI backends.

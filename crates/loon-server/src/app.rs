@@ -2,10 +2,7 @@
 
 use std::sync::Arc;
 
-use axum::{
-    routing::get,
-    Router,
-};
+use axum::{routing::get, Router};
 use loon_sdk::Server;
 
 /// State injected into every Axum handler via
@@ -31,7 +28,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/v1/sessions",
-            get(crate::routes::sessions::list_sessions).post(crate::routes::sessions::create_session),
+            get(crate::routes::sessions::list_sessions)
+                .post(crate::routes::sessions::create_session),
         )
         .route(
             "/v1/customers",

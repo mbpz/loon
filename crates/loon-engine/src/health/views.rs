@@ -36,9 +36,18 @@ mod tests {
 
     #[test]
     fn views_construct() {
-        let e = EngineHealthView { status: "ok".into(), metrics: HashMap::new() };
-        let n = NlpHealthView { status: "ok".into(), provider: "openai".into() };
-        let l = EventLoopHealthView { status: "ok".into(), lag_ms: 5 };
+        let e = EngineHealthView {
+            status: "ok".into(),
+            metrics: HashMap::new(),
+        };
+        let n = NlpHealthView {
+            status: "ok".into(),
+            provider: "openai".into(),
+        };
+        let l = EventLoopHealthView {
+            status: "ok".into(),
+            lag_ms: 5,
+        };
         _accepts_engine(&e);
         _accepts_nlp(&n);
         _accepts_loop(&l);

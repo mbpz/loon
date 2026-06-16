@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use crate::{
     stores::{GuidelineStore, JourneyStore},
     CoreError, CoreResult, Guideline, GuidelineId, JourneyId, JourneyNodeId, UniqueId,
 };
+use std::sync::Arc;
 
 pub struct JourneyGuidelineProjection {
     pub journey_store: Arc<dyn JourneyStore>,
@@ -10,11 +10,20 @@ pub struct JourneyGuidelineProjection {
 }
 
 impl JourneyGuidelineProjection {
-    pub fn new(journey_store: Arc<dyn JourneyStore>, guideline_store: Arc<dyn GuidelineStore>) -> Self {
-        Self { journey_store, guideline_store }
+    pub fn new(
+        journey_store: Arc<dyn JourneyStore>,
+        guideline_store: Arc<dyn GuidelineStore>,
+    ) -> Self {
+        Self {
+            journey_store,
+            guideline_store,
+        }
     }
 
-    pub async fn project_journey_to_guidelines(&self, journey_id: &JourneyId) -> CoreResult<Vec<Guideline>> {
+    pub async fn project_journey_to_guidelines(
+        &self,
+        journey_id: &JourneyId,
+    ) -> CoreResult<Vec<Guideline>> {
         let _journey = self
             .journey_store
             .read(journey_id)

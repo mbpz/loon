@@ -1,17 +1,18 @@
-use std::path::{Path, PathBuf};
-use std::time::Duration;
-use std::collections::HashMap;
-use std::sync::Arc;
+use crate::error::PersistenceResult;
+use crate::{
+    BaseDocument, DeleteResult, Document, DocumentCollection, DocumentDatabase,
+    DocumentDatabaseHandle, DocumentFilter, DocumentLoader, DocumentUpdate, InsertResult,
+    UpdateResult,
+};
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use uuid::Uuid;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use crate::{
-    Document, DocumentCollection, DocumentDatabase, DocumentDatabaseHandle, DocumentFilter, DocumentUpdate,
-    InsertResult, UpdateResult, DeleteResult, BaseDocument, DocumentLoader,
-};
-use crate::error::PersistenceResult;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
+use uuid::Uuid;
 
 pub struct JsonFileDocumentDatabase {
     root: PathBuf,
@@ -307,10 +308,7 @@ mod integration_tests {
         coll.insert_one(a.clone()).await.unwrap();
         coll.insert_one(b.clone()).await.unwrap();
 
-        let all = coll
-            .find(&DocumentFilter::Or(vec![]))
-            .await
-            .unwrap();
+        let all = coll.find(&DocumentFilter::Or(vec![])).await.unwrap();
         // empty Or => true (any of nothing = false). Use And([]) -> all-match.
         let _ = all;
 
@@ -323,10 +321,7 @@ mod integration_tests {
             .unwrap();
         assert_eq!(found, Some(a.clone()));
 
-        let count = coll
-            .count(&DocumentFilter::And(vec![]))
-            .await
-            .unwrap();
+        let count = coll.count(&DocumentFilter::And(vec![])).await.unwrap();
         assert_eq!(count, 2);
 
         let res = coll
@@ -337,10 +332,7 @@ mod integration_tests {
             .await
             .unwrap();
         assert_eq!(res.deleted, 1);
-        let count = coll
-            .count(&DocumentFilter::And(vec![]))
-            .await
-            .unwrap();
+        let count = coll.count(&DocumentFilter::And(vec![])).await.unwrap();
         assert_eq!(count, 1);
     }
 }

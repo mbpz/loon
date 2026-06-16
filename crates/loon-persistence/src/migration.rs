@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use crate::error::PersistenceResult;
+use std::sync::Arc;
 
 /// Object-safe subset of `DocumentDatabase` used for type-erased handles.
 ///

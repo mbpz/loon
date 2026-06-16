@@ -1,15 +1,15 @@
 //! Persistence abstractions for loon.
 
+pub mod backends;
+pub mod document;
 pub mod error;
 pub mod filter;
-pub mod document;
-pub mod vector;
 pub mod migration;
-pub mod backends;
+pub mod vector;
 
+pub use backends::*;
+pub use document::*;
 pub use error::*;
 pub use filter::*;
-pub use document::*;
-pub use vector::*;
 pub use migration::*;
-pub use backends::*;
+pub use vector::*;

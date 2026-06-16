@@ -63,8 +63,7 @@ impl GuidelineMatcher for LlmGuidelineMatcher {
             .map_err(|e| EngineError::GuidelineMatchingFailed(e.to_string()))?;
 
         // Convert the erased JSON value to our typed struct.
-        let parsed: LlmMatchOutput =
-            serde_json::from_value(result.value).unwrap_or_default();
+        let parsed: LlmMatchOutput = serde_json::from_value(result.value).unwrap_or_default();
 
         let matches: Vec<GuidelineMatch> = ctx
             .guidelines
@@ -90,8 +89,8 @@ impl GuidelineMatcher for LlmGuidelineMatcher {
 mod tests {
     use super::*;
     use loon_core::{
-        Agent, AgentId, CustomerId, Event, EventId, EventKind, EventSource, Guideline,
-        GuidelineContent, Criticality, Session, SessionId, SessionMode, TagId, UniqueId,
+        Agent, AgentId, Criticality, CustomerId, Event, EventId, EventKind, EventSource, Guideline,
+        GuidelineContent, Session, SessionId, SessionMode, TagId, UniqueId,
     };
     use loon_nlp::test_utils::FakeNlpService;
 
@@ -152,6 +151,11 @@ mod tests {
         assert!(result.is_empty());
 
         // Silence unused warnings on cross-crate types.
-        let _ = (UniqueId::default(), CustomerId::new(), TagId::new(), AgentId::new());
+        let _ = (
+            UniqueId::default(),
+            CustomerId::new(),
+            TagId::new(),
+            AgentId::new(),
+        );
     }
 }

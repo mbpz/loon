@@ -1,6 +1,6 @@
+use crate::RelationshipId;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::RelationshipId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RelationshipKind {
@@ -35,7 +35,11 @@ pub struct Relationship {
 }
 
 impl Relationship {
-    pub fn new(source: RelationshipEntity, target: RelationshipEntity, kind: RelationshipKind) -> Self {
+    pub fn new(
+        source: RelationshipEntity,
+        target: RelationshipEntity,
+        kind: RelationshipKind,
+    ) -> Self {
         Self {
             id: RelationshipId::new(),
             source,
@@ -53,8 +57,14 @@ mod tests {
     #[test]
     fn relationship_default_not_indirect() {
         let r = Relationship::new(
-            RelationshipEntity { kind: RelationshipEntityKind::Guideline, id: "a".into() },
-            RelationshipEntity { kind: RelationshipEntityKind::Guideline, id: "b".into() },
+            RelationshipEntity {
+                kind: RelationshipEntityKind::Guideline,
+                id: "a".into(),
+            },
+            RelationshipEntity {
+                kind: RelationshipEntityKind::Guideline,
+                id: "b".into(),
+            },
             RelationshipKind::Excludes,
         );
         assert!(!r.indirect);

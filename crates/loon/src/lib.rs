@@ -5,7 +5,11 @@ pub mod repl;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "loon", version, about = "loon — interaction control harness for customer-facing AI agents (Rust port of Parlant)")]
+#[command(
+    name = "loon",
+    version,
+    about = "loon — interaction control harness for customer-facing AI agents (Rust port of Parlant)"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub cmd: Cmd,
@@ -186,7 +190,7 @@ mod tests {
         // (when running with try_parse_from under clap 4 it returns
         // an ErrorKind::DisplayHelp). The point of this test is that
         // the CLI definition is structurally valid.
-        let res = Cli::try_parse_from(&["loon", "--help"]);
+        let res = Cli::try_parse_from(["loon", "--help"]);
         // Help causes clap to "fail" with DisplayHelp — that's still
         // an indication the CLI definition is parseable. We accept
         // any outcome (Ok or Err) as long as the binary does not
@@ -199,7 +203,7 @@ mod tests {
 
     #[test]
     fn cli_server_start_parses() {
-        let cli = Cli::try_parse_from(&["loon", "server", "start", "--config", "/tmp/x.toml"])
+        let cli = Cli::try_parse_from(["loon", "server", "start", "--config", "/tmp/x.toml"])
             .expect("parse");
         match cli.cmd {
             Cmd::Server {
@@ -211,8 +215,9 @@ mod tests {
 
     #[test]
     fn cli_session_chat_parses() {
-        let cli = Cli::try_parse_from(&["loon", "session", "chat", "abc-123", "--server", "http://x"])
-            .expect("parse");
+        let cli =
+            Cli::try_parse_from(["loon", "session", "chat", "abc-123", "--server", "http://x"])
+                .expect("parse");
         match cli.cmd {
             Cmd::Session {
                 action: SessionCmd::Chat { session_id, server },
@@ -236,6 +241,7 @@ mod tests {
         // signature. If someone removes the dependency on
         // `loon_server` from `server_start`, this test stops
         // compiling.
+        #[allow(clippy::type_complexity)]
         let _f: fn() -> std::pin::Pin<
             Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send>,
         > = || Box::pin(loon_server::run());
@@ -243,7 +249,7 @@ mod tests {
 
     #[test]
     fn cli_agent_list_parses() {
-        let cli = Cli::try_parse_from(&["loon", "agent", "list"]).expect("parse");
+        let cli = Cli::try_parse_from(["loon", "agent", "list"]).expect("parse");
         match cli.cmd {
             Cmd::Agent {
                 action: AgentCmd::List { server },
@@ -254,7 +260,7 @@ mod tests {
 
     #[test]
     fn cli_guideline_list_parses() {
-        let cli = Cli::try_parse_from(&["loon", "guideline", "list"]).expect("parse");
+        let cli = Cli::try_parse_from(["loon", "guideline", "list"]).expect("parse");
         match cli.cmd {
             Cmd::Guideline {
                 action: GuidelineCmd::List { server },
@@ -265,8 +271,14 @@ mod tests {
 
     #[test]
     fn cli_session_create_parses() {
-        let cli = Cli::try_parse_from(&[
-            "loon", "session", "create", "--agent", "agent-1", "--server", "http://h:1",
+        let cli = Cli::try_parse_from([
+            "loon",
+            "session",
+            "create",
+            "--agent",
+            "agent-1",
+            "--server",
+            "http://h:1",
         ])
         .expect("parse");
         match cli.cmd {
@@ -282,8 +294,14 @@ mod tests {
 
     #[test]
     fn cli_journey_create_parses() {
-        let cli = Cli::try_parse_from(&[
-            "loon", "journey", "create", "--agent", "agent-1", "--server", "http://h:2",
+        let cli = Cli::try_parse_from([
+            "loon",
+            "journey",
+            "create",
+            "--agent",
+            "agent-1",
+            "--server",
+            "http://h:2",
         ])
         .expect("parse");
         match cli.cmd {
@@ -299,8 +317,14 @@ mod tests {
 
     #[test]
     fn cli_tool_create_parses() {
-        let cli = Cli::try_parse_from(&[
-            "loon", "tool", "create", "--agent", "agent-1", "--server", "http://h:3",
+        let cli = Cli::try_parse_from([
+            "loon",
+            "tool",
+            "create",
+            "--agent",
+            "agent-1",
+            "--server",
+            "http://h:3",
         ])
         .expect("parse");
         match cli.cmd {

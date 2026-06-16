@@ -94,11 +94,7 @@ mod tests {
         async fn read(&self, id: &SessionId) -> CoreResult<Option<Session>> {
             Ok(self.sessions.lock().get(id).cloned())
         }
-        async fn update(
-            &self,
-            id: &SessionId,
-            p: SessionUpdateParams,
-        ) -> CoreResult<Session> {
+        async fn update(&self, id: &SessionId, p: SessionUpdateParams) -> CoreResult<Session> {
             let mut g = self.sessions.lock();
             let s = g.get_mut(id).unwrap();
             if let Some(t) = p.title {
@@ -123,11 +119,7 @@ mod tests {
         ) -> CoreResult<Vec<Session>> {
             Ok(self.sessions.lock().values().cloned().collect())
         }
-        async fn create_event(
-            &self,
-            session_id: SessionId,
-            event: Event,
-        ) -> CoreResult<Event> {
+        async fn create_event(&self, session_id: SessionId, event: Event) -> CoreResult<Event> {
             self.events
                 .lock()
                 .entry(session_id)

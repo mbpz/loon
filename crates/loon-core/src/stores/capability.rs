@@ -1,5 +1,7 @@
+use crate::{
+    AgentId, Capability, CapabilityId, CapabilityUpdateParams, CoreResult, Retriever, RetrieverId,
+};
 use async_trait::async_trait;
-use crate::{AgentId, Capability, CapabilityId, CapabilityUpdateParams, CoreResult, Retriever, RetrieverId};
 
 #[async_trait]
 pub trait CapabilityStore: Send + Sync {

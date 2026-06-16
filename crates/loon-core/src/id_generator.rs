@@ -1,16 +1,19 @@
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use std::collections::HashMap;
 use xxhash_rust::xxh3::xxh3_64;
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
 use crate::common::UniqueId;
 
 pub struct IdGenerator {
     cache: HashMap<String, u64>,
-    counter: u64,
 }
 
 impl IdGenerator {
-    pub fn new() -> Self { Self { cache: HashMap::new(), counter: 0 } }
+    pub fn new() -> Self {
+        Self {
+            cache: HashMap::new(),
+        }
+    }
     pub fn generate(&mut self, content_checksum: &str) -> UniqueId {
         let hash = xxh3_64(content_checksum.as_bytes());
         if let Some(existing) = self.cache.get(content_checksum) {
@@ -19,12 +22,22 @@ impl IdGenerator {
         self.cache.insert(content_checksum.to_string(), hash);
         UniqueId(Self::encode(hash))
     }
-    pub fn generate_random() -> UniqueId { UniqueId::new() }
+    pub fn generate_random() -> UniqueId {
+        UniqueId::new()
+    }
     fn encode(hash: u64) -> String {
-        URL_SAFE_NO_PAD.encode(hash.to_le_bytes()).chars().take(10).collect()
+        URL_SAFE_NO_PAD
+            .encode(hash.to_le_bytes())
+            .chars()
+            .take(10)
+            .collect()
     }
 }
-impl Default for IdGenerator { fn default() -> Self { Self::new() } }
+impl Default for IdGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {

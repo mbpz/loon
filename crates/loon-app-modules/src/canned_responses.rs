@@ -86,10 +86,7 @@ mod tests {
             self.data.lock().insert(id, c.clone());
             Ok(c)
         }
-        async fn read(
-            &self,
-            id: &CannedResponseId,
-        ) -> CoreResult<Option<CannedResponse>> {
+        async fn read(&self, id: &CannedResponseId) -> CoreResult<Option<CannedResponse>> {
             Ok(self.data.lock().get(id).cloned())
         }
         async fn update(

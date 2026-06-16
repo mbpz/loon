@@ -64,7 +64,6 @@ mod tests {
     // Verify EngineError is reachable from this module path.
     #[allow(dead_code)]
     fn _check_error(_: EngineError) {}
-    use crate::tool_calling::caller::ToolCallBatch;
 
     fn dummy_ctx(_nlp: Arc<dyn NlpService>, _reg: Arc<dyn ServiceRegistry>) -> EngineContext {
         // A minimal valid EngineContext. `add_tool_event` and friends

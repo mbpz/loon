@@ -8,20 +8,16 @@ use loon_core::{Guideline, TagId};
 use crate::guideline_matching::custom_strategy::CustomGuidelineMatchingStrategy;
 
 /// Maps tags to user-supplied matching strategies.
+#[derive(Default)]
 pub struct GenericGuidelineMatchingStrategyResolver {
     pub strategies: HashMap<TagId, Arc<dyn CustomGuidelineMatchingStrategy>>,
 }
 
-impl Default for GenericGuidelineMatchingStrategyResolver {
-    fn default() -> Self {
-        Self {
-            strategies: HashMap::new(),
-        }
-    }
-}
-
 impl GenericGuidelineMatchingStrategyResolver {
-    pub fn strategy_for(&self, _guideline: &Guideline) -> Option<Arc<dyn CustomGuidelineMatchingStrategy>> {
+    pub fn strategy_for(
+        &self,
+        _guideline: &Guideline,
+    ) -> Option<Arc<dyn CustomGuidelineMatchingStrategy>> {
         // Phase 1: no overrides; relationship traversal deferred.
         None
     }

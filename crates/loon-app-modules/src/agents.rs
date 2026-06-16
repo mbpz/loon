@@ -42,11 +42,7 @@ impl AgentAppModule {
         self.store.read(id).await
     }
 
-    pub async fn update_agent(
-        &self,
-        id: &AgentId,
-        params: AgentUpdateParams,
-    ) -> CoreResult<Agent> {
+    pub async fn update_agent(&self, id: &AgentId, params: AgentUpdateParams) -> CoreResult<Agent> {
         self.store.update(id, params).await
     }
 
@@ -90,11 +86,7 @@ mod tests {
             Ok(self.data.lock().get(id).cloned())
         }
 
-        async fn update(
-            &self,
-            id: &AgentId,
-            params: AgentUpdateParams,
-        ) -> CoreResult<Agent> {
+        async fn update(&self, id: &AgentId, params: AgentUpdateParams) -> CoreResult<Agent> {
             let mut g = self.data.lock();
             let a = g.get_mut(id).expect("agent must exist");
             if let Some(n) = params.name {

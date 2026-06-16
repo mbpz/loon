@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::GlossaryTermId;
 use crate::TagId;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Term {

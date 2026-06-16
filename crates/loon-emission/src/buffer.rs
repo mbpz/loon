@@ -1,9 +1,15 @@
-use async_trait::async_trait;
-use loon_core::{Agent, AgentId, SessionId, JsonValue, MessageEventData, StatusEventData, ToolEventData, EventSource, EventKind, Participant};
-use std::collections::HashMap;
-use parking_lot::Mutex;
-use crate::{EmissionResult, EmittedEvent, MessageEmitData, MessageEventHandle, EventEmitter, EventEmitterFactory, EmissionError};
 use crate::types::EventUpdater;
+use crate::{
+    EmissionError, EmissionResult, EmittedEvent, EventEmitter, EventEmitterFactory,
+    MessageEmitData, MessageEventHandle,
+};
+use async_trait::async_trait;
+use loon_core::{
+    Agent, AgentId, EventKind, EventSource, JsonValue, MessageEventData, Participant, SessionId,
+    StatusEventData, ToolEventData,
+};
+use parking_lot::Mutex;
+use std::collections::HashMap;
 
 pub struct EventBuffer {
     pub agent: Agent,
@@ -12,7 +18,10 @@ pub struct EventBuffer {
 
 impl EventBuffer {
     pub fn new(agent: Agent) -> Self {
-        Self { agent, events: Mutex::new(vec![]) }
+        Self {
+            agent,
+            events: Mutex::new(vec![]),
+        }
     }
     pub fn events(&self) -> Vec<EmittedEvent> {
         self.events.lock().clone()
@@ -132,7 +141,7 @@ impl EventEmitterFactory for EventBufferFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loon_core::{Agent, StatusEventData, ToolEventData, ToolCallData};
+    use loon_core::{Agent, StatusEventData, ToolCallData, ToolEventData};
 
     #[tokio::test]
     async fn buffer_collects_all_event_kinds() {
@@ -140,7 +149,10 @@ mod tests {
         let buf = EventBuffer::new(agent);
         buf.emit_status_event(
             "t1",
-            StatusEventData { stage: "ack".into(), details: None },
+            StatusEventData {
+                stage: "ack".into(),
+                details: None,
+            },
             None,
         )
         .await

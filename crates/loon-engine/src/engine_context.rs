@@ -10,7 +10,7 @@ use loon_core::{
 };
 use loon_emission::{EmittedEvent, EventEmitter};
 
-use crate::error::{EngineError, EngineResult};
+use crate::error::EngineResult;
 
 /// Identifies which session/agent an `EngineContext` is bound to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -81,7 +81,7 @@ pub struct IterationState {
 
 /// State accumulated across all preparation iterations for a single
 /// response.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ResponseState {
     pub iterations: Vec<IterationState>,
     pub prepared_to_respond: bool,
@@ -93,33 +93,10 @@ pub struct ResponseState {
     pub tool_events: Vec<EmittedEvent>,
 }
 
-impl Default for ResponseState {
-    fn default() -> Self {
-        Self {
-            iterations: vec![],
-            prepared_to_respond: false,
-            tool_insights: ToolInsights::default(),
-            ordinary_guideline_matches: vec![],
-            usable_guidelines: vec![],
-            journeys: vec![],
-            message_events: vec![],
-            tool_events: vec![],
-        }
-    }
-}
-
 /// Aggregate insights about the tools considered during preparation.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ToolInsights {
     pub evaluations: HashMap<ToolId, ToolCallEvaluation>,
-}
-
-impl Default for ToolInsights {
-    fn default() -> Self {
-        Self {
-            evaluations: HashMap::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

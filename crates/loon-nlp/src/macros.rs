@@ -89,10 +89,21 @@ mod tests {
 
     #[test]
     fn json_schema_built_ins() {
-        assert_eq!(<String as JsonSchema>::schema(), serde_json::json!({"type":"string"}));
-        assert_eq!(<i32 as JsonSchema>::schema(), serde_json::json!({"type":"integer"}));
-        assert_eq!(<bool as JsonSchema>::schema(), serde_json::json!({"type":"boolean"}));
-        assert_eq!(<Vec<f32> as JsonSchema>::schema(),
-            serde_json::json!({"type":"array","items":{"type":"number"}}));
+        assert_eq!(
+            <String as JsonSchema>::schema(),
+            serde_json::json!({"type":"string"})
+        );
+        assert_eq!(
+            <i32 as JsonSchema>::schema(),
+            serde_json::json!({"type":"integer"})
+        );
+        assert_eq!(
+            <bool as JsonSchema>::schema(),
+            serde_json::json!({"type":"boolean"})
+        );
+        assert_eq!(
+            <Vec<f32> as JsonSchema>::schema(),
+            serde_json::json!({"type":"array","items":{"type":"number"}})
+        );
     }
 }

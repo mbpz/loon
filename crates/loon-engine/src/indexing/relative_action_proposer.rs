@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 
-use loon_core::{AgentId, Criticality, Guideline, GuidelineContent};
+use loon_core::Guideline;
 
 use crate::error::EngineResult;
 
@@ -22,13 +22,14 @@ impl RelativeActionProposer for NoopRelativeActionProposer {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use loon_core::{AgentId, GuidelineContent};
 
     fn _accepts(_: &dyn RelativeActionProposer) {}
 
     #[tokio::test]
     async fn noop_proposer_returns_empty() {
         let p = NoopRelativeActionProposer;
-        let _ = _accepts(&p);
+        _accepts(&p);
         let g = Guideline::new(
             GuidelineContent {
                 condition: "c".into(),
@@ -41,6 +42,5 @@ mod tests {
         );
         let res = p.propose(&g).await.unwrap();
         assert!(res.is_empty());
-        let _: Criticality = Criticality::Low;
     }
 }

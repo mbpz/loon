@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::{AgentId, CoreResult, Guideline, GuidelineId, GuidelineUpdateParams, TagId};
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait GuidelineStore: Send + Sync {

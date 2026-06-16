@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use loon_core::{EventSource, EventKind, MessageEventData, JsonValue};
 use loon_core::async_utils::BoxFuture;
+use loon_core::{EventKind, EventSource, JsonValue, MessageEventData};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct EmittedEvent {
@@ -50,7 +50,11 @@ mod tests {
             source: EventSource::AiAgent,
             kind: EventKind::Status,
             trace_id: "t1".into(),
-            data: serde_json::to_value(StatusEventData { stage: "ack".into(), details: None }).unwrap(),
+            data: serde_json::to_value(StatusEventData {
+                stage: "ack".into(),
+                details: None,
+            })
+            .unwrap(),
             metadata: None,
         };
         assert_eq!(evt.trace_id, "t1");

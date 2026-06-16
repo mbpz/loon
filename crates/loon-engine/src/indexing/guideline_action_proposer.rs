@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 
-use loon_core::{AgentId, Guideline};
+use loon_core::AgentId;
 
 use super::common::GuidelineActionProposerOutput;
 use crate::error::EngineResult;
@@ -33,9 +33,8 @@ mod tests {
     #[tokio::test]
     async fn noop_proposer_returns_empty() {
         let p = NoopGuidelineActionProposer;
-        let _ = _accepts(&p);
+        _accepts(&p);
         let res = p.propose(&AgentId::new(), "do something").await.unwrap();
         assert!(res.candidates.is_empty());
-        let _: Vec<Guideline> = vec![];
     }
 }

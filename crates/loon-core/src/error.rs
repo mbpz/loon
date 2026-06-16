@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::common::UniqueId;
+use thiserror::Error;
 pub type CoreResult<T> = Result<T, CoreError>;
 
 #[derive(Debug, Error)]

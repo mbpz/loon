@@ -1,5 +1,5 @@
+use crate::{CoreResult, Relationship, RelationshipEntity, RelationshipId};
 use async_trait::async_trait;
-use crate::{CoreResult, Relationship, RelationshipEntity, RelationshipEntityKind, RelationshipId, RelationshipKind};
 
 #[async_trait]
 pub trait RelationshipStore: Send + Sync {

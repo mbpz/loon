@@ -4,16 +4,16 @@ use async_trait::async_trait;
 
 use crate::config::NlpConfig;
 use crate::embedding::Embedder;
+use crate::error::NlpError;
 use crate::generator::{
     GenerationInfo, StreamingTextGenerationResult, StreamingTextGenerator, TextGenerationOptions,
 };
 use crate::moderation::{Moderater, ModerationResult};
 use crate::service::NlpService;
 use crate::tokenization::Tokenizer;
-use crate::{NlpResult, Schematic, SchematicGenerator};
-use crate::error::NlpError;
+use crate::NlpResult;
 
-use super::openai::OpenAiSchematicGenerator;
+pub use super::openai::OpenAiSchematicGenerator;
 
 pub struct OpenAiProvider {
     config: Arc<NlpConfig>,
@@ -136,6 +136,7 @@ impl NlpService for OpenAiProvider {
 mod tests {
     use super::*;
     use crate::define_schematic;
+    use crate::schematic::Schematic;
     use std::time::Duration;
 
     define_schematic! {

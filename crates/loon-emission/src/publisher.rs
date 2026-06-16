@@ -1,11 +1,17 @@
+use crate::types::EventUpdater;
+use crate::{
+    EmissionError, EmissionResult, EmittedEvent, EventEmitter, EventEmitterFactory,
+    MessageEmitData, MessageEventHandle,
+};
 use async_trait::async_trait;
-use loon_core::{Agent, AgentId, SessionId, JsonValue, MessageEventData, StatusEventData, ToolEventData, EventSource, EventKind, Event, EventId, EventUpdateParams, Participant};
+use chrono::Utc;
 use loon_core::stores::SessionStore;
+use loon_core::{
+    Agent, AgentId, Event, EventId, EventKind, EventSource, EventUpdateParams, JsonValue,
+    MessageEventData, Participant, SessionId, StatusEventData, ToolEventData,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
-use chrono::Utc;
-use crate::{EmissionResult, EmittedEvent, MessageEmitData, MessageEventHandle, EventEmitter, EventEmitterFactory, EmissionError};
-use crate::types::EventUpdater;
 
 pub struct EventPublisher {
     pub agent: Agent,
@@ -195,8 +201,10 @@ impl EventEmitterFactory for EventPublisherFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loon_core::{Agent, Session, StatusEventData, ToolEventData, ToolCallData, MessageEventData};
     use crate::MessageEmitData;
+    use loon_core::{
+        Agent, MessageEventData, Session, StatusEventData, ToolCallData, ToolEventData,
+    };
     use std::sync::Mutex as StdMutex;
 
     /// Fake SessionStore: tracks created events and supports update_event.
@@ -244,7 +252,10 @@ mod tests {
             session_id: SessionId,
             event: Event,
         ) -> loon_core::CoreResult<Event> {
-            self.events.lock().unwrap().push((session_id, event.clone()));
+            self.events
+                .lock()
+                .unwrap()
+                .push((session_id, event.clone()));
             Ok(event)
         }
         async fn update_event(
@@ -253,7 +264,10 @@ mod tests {
             event_id: &EventId,
             _p: EventUpdateParams,
         ) -> loon_core::CoreResult<Event> {
-            self.updates.lock().unwrap().push((session_id.clone(), event_id.clone()));
+            self.updates
+                .lock()
+                .unwrap()
+                .push((session_id.clone(), event_id.clone()));
             // Return any matching event if we have it, else fabricate one
             let evt = Event {
                 id: event_id.clone(),
@@ -266,16 +280,10 @@ mod tests {
             };
             Ok(evt)
         }
-        async fn read_events(
-            &self,
-            _session_id: &SessionId,
-        ) -> loon_core::CoreResult<Vec<Event>> {
+        async fn read_events(&self, _session_id: &SessionId) -> loon_core::CoreResult<Vec<Event>> {
             Ok(vec![])
         }
-        async fn find_events(
-            &self,
-            _session_id: &SessionId,
-        ) -> loon_core::CoreResult<Vec<Event>> {
+        async fn find_events(&self, _session_id: &SessionId) -> loon_core::CoreResult<Vec<Event>> {
             Ok(vec![])
         }
     }
@@ -293,7 +301,10 @@ mod tests {
         let emitted = pub_
             .emit_status_event(
                 "t1",
-                StatusEventData { stage: "ack".into(), details: None },
+                StatusEventData {
+                    stage: "ack".into(),
+                    details: None,
+                },
                 None,
             )
             .await
@@ -319,13 +330,16 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(handle.event.trace_id, "t1");
-        let stored = store.events.lock().unwrap();
-        assert_eq!(stored.len(), 1);
-        let stored_id = stored[0].1.id.clone();
-        drop(stored);
+        let stored_id = {
+            let stored = store.events.lock().unwrap();
+            assert_eq!(stored.len(), 1);
+            stored[0].1.id.clone()
+        };
 
         // Call the updater
-        let _ = (handle.update)(MessageEventData::new("updated")).await.unwrap();
+        let _ = (handle.update)(MessageEventData::new("updated"))
+            .await
+            .unwrap();
         let updates = store.updates.lock().unwrap();
         assert_eq!(updates.len(), 1);
         assert_eq!(updates[0].0, session_id);

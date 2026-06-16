@@ -28,7 +28,7 @@ mod tests {
     #[tokio::test]
     async fn noop_proposer_returns_empty() {
         let p = NoopGuidelineContinuousProposer;
-        let _ = _accepts(&p);
+        _accepts(&p);
         let res = p.propose(&AgentId::new()).await.unwrap();
         assert!(res.is_empty());
         let _: Vec<Guideline> = vec![];

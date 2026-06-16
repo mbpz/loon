@@ -34,10 +34,7 @@ impl CapabilityAppModule {
         self.store.create(c).await
     }
 
-    pub async fn read_capability(
-        &self,
-        id: &CapabilityId,
-    ) -> CoreResult<Option<Capability>> {
+    pub async fn read_capability(&self, id: &CapabilityId) -> CoreResult<Option<Capability>> {
         self.store.read(id).await
     }
 
@@ -53,10 +50,7 @@ impl CapabilityAppModule {
         self.store.delete(id).await
     }
 
-    pub async fn list_capabilities(
-        &self,
-        agent_id: &AgentId,
-    ) -> CoreResult<Vec<Capability>> {
+    pub async fn list_capabilities(&self, agent_id: &AgentId) -> CoreResult<Vec<Capability>> {
         self.store.list(agent_id).await
     }
 }
@@ -78,20 +72,14 @@ impl RetrieverAppModule {
         Self { store }
     }
 
-    pub async fn create_retriever(
-        &self,
-        params: RetrieverCreateParams,
-    ) -> CoreResult<Retriever> {
+    pub async fn create_retriever(&self, params: RetrieverCreateParams) -> CoreResult<Retriever> {
         let mut r = Retriever::new(&params.agent_id, params.name);
         r.description = params.description;
         r.tags = params.tags;
         self.store.create(r).await
     }
 
-    pub async fn read_retriever(
-        &self,
-        id: &RetrieverId,
-    ) -> CoreResult<Option<Retriever>> {
+    pub async fn read_retriever(&self, id: &RetrieverId) -> CoreResult<Option<Retriever>> {
         self.store.read(id).await
     }
 
@@ -99,10 +87,7 @@ impl RetrieverAppModule {
         self.store.delete(id).await
     }
 
-    pub async fn list_retrievers(
-        &self,
-        agent_id: &AgentId,
-    ) -> CoreResult<Vec<Retriever>> {
+    pub async fn list_retrievers(&self, agent_id: &AgentId) -> CoreResult<Vec<Retriever>> {
         self.store.list(agent_id).await
     }
 }

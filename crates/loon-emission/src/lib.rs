@@ -1,11 +1,11 @@
-pub mod error;
-pub mod types;
-pub mod emitter;
 pub mod buffer;
+pub mod emitter;
+pub mod error;
 pub mod publisher;
+pub mod types;
 
-pub use error::*;
-pub use types::*;
-pub use emitter::*;
 pub use buffer::*;
+pub use emitter::*;
+pub use error::*;
 pub use publisher::*;
+pub use types::*;

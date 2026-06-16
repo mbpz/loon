@@ -59,7 +59,11 @@ mod tests {
 
     #[test]
     fn version_serializes_to_string() {
-        let v = Version { major: 1, minor: 2, patch: 3 };
+        let v = Version {
+            major: 1,
+            minor: 2,
+            patch: 3,
+        };
         let s = serde_json::to_string(&v).unwrap();
         assert_eq!(s, r#"{"major":1,"minor":2,"patch":3}"#);
     }

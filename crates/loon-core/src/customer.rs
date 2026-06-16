@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use crate::{CustomerId, JsonValue, TagId};
 use chrono::{DateTime, Utc};
-use crate::{CustomerId, TagId, JsonValue};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Customer {

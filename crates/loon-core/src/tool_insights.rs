@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::common::JsonValue;
 use crate::ToolId;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Aggregated observations / metrics produced by tool executions.
 /// Stub for Stage 1; populated in later stages.

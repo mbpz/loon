@@ -30,7 +30,9 @@ pub struct Stopwatch {
 
 impl Stopwatch {
     pub fn start() -> Self {
-        Self { start: Instant::now() }
+        Self {
+            start: Instant::now(),
+        }
     }
     pub fn elapsed_ms(&self) -> u128 {
         self.start.elapsed().as_millis()

@@ -9,8 +9,8 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde::Serialize;
 use loon_persistence::PaginatedResult;
+use serde::Serialize;
 
 /// JSON body returned for every error response.
 #[derive(Debug, Serialize)]
@@ -140,7 +140,7 @@ impl<T: Serialize> From<PaginatedResult<T>> for ApiListResponse<T> {
 mod tests {
     use super::*;
     use axum::http::StatusCode;
-    use loon_core::{AgentId, CustomerId, GuidelineId, SessionId, ToolId, JourneyId};
+    use loon_core::{AgentId, CustomerId, GuidelineId, JourneyId, SessionId, ToolId};
     use loon_sdk::SdkError;
 
     #[test]
@@ -177,7 +177,9 @@ mod tests {
         assert!(matches!(agent_err, ApiError::NotFound(_, ref c) if c == "AGENT_NOT_FOUND"));
 
         let guideline_err = ApiError::from(SdkError::GuidelineNotFound(GuidelineId::new()));
-        assert!(matches!(guideline_err, ApiError::NotFound(_, ref c) if c == "GUIDELINE_NOT_FOUND"));
+        assert!(
+            matches!(guideline_err, ApiError::NotFound(_, ref c) if c == "GUIDELINE_NOT_FOUND")
+        );
 
         let session_err = ApiError::from(SdkError::SessionNotFound(SessionId::new()));
         assert!(matches!(session_err, ApiError::NotFound(_, ref c) if c == "SESSION_NOT_FOUND"));

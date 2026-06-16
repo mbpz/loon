@@ -3,14 +3,14 @@
 
 pub mod alpha_engine;
 pub mod canned_response_generator;
-pub mod entity_context;
-pub mod engine_context;
 pub mod engine;
-pub mod health;
-pub mod indexing;
+pub mod engine_context;
+pub mod entity_context;
 pub mod error;
 pub mod guideline_matching;
+pub mod health;
 pub mod hooks;
+pub mod indexing;
 pub mod message_event_composer;
 pub mod message_generator;
 pub mod optimization_policy;
@@ -23,14 +23,14 @@ pub mod tool_event_generator;
 
 pub use alpha_engine::*;
 pub use canned_response_generator::*;
-pub use entity_context::*;
-pub use engine_context::*;
 pub use engine::*;
-pub use health::*;
-pub use indexing::*;
+pub use engine_context::*;
+pub use entity_context::*;
 pub use error::*;
 pub use guideline_matching::*;
+pub use health::*;
 pub use hooks::*;
+pub use indexing::*;
 pub use message_event_composer::*;
 pub use message_generator::*;
 pub use optimization_policy::*;

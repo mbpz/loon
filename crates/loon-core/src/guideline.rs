@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use crate::{AgentId, Criticality, GuidelineId, JsonValue, TagId};
 use chrono::{DateTime, Utc};
-use crate::{AgentId, GuidelineId, TagId, Criticality, JsonValue};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GuidelineContent {
@@ -22,7 +22,12 @@ pub struct Guideline {
 }
 
 impl Guideline {
-    pub fn new(content: GuidelineContent, agent_id: &AgentId, enabled: bool, criticality_int: i32) -> Self {
+    pub fn new(
+        content: GuidelineContent,
+        agent_id: &AgentId,
+        enabled: bool,
+        criticality_int: i32,
+    ) -> Self {
         Self {
             id: GuidelineId::new(),
             agent_id: agent_id.clone(),

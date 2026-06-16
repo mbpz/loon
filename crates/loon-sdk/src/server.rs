@@ -11,8 +11,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use loon_core::SessionId;
 use loon_emission::EventEmitter;
-use loon_engine::{Engine, EngineResult, UtteranceRequest};
 use loon_engine::engine_context::Context;
+use loon_engine::{Engine, EngineResult, UtteranceRequest};
 
 use crate::error::SdkResult;
 
@@ -54,7 +54,10 @@ pub struct ServerBuilder {
 
 impl ServerBuilder {
     pub fn new() -> Self {
-        Self { document_db_label: None, nlp_label: None }
+        Self {
+            document_db_label: None,
+            nlp_label: None,
+        }
     }
 
     /// Reserve a hook for the document database that will back the
@@ -78,7 +81,9 @@ impl ServerBuilder {
 
     /// Build the [`Server`]. Always succeeds in Phase 1.
     pub async fn build(self) -> SdkResult<Server> {
-        Ok(Server { engine: Arc::new(StubEngine) })
+        Ok(Server {
+            engine: Arc::new(StubEngine),
+        })
     }
 }
 
@@ -173,8 +178,7 @@ mod tests {
         // covered.
         let dir = tempdir().expect("tempdir");
         let db: Arc<JsonFileDocumentDatabase> = Arc::new(
-            JsonFileDocumentDatabase::new(dir.path(), Duration::from_secs(1))
-                .expect("db"),
+            JsonFileDocumentDatabase::new(dir.path(), Duration::from_secs(1)).expect("db"),
         );
         let nlp: Arc<dyn loon_nlp::NlpService> = Arc::new(FakeNlpService::new());
 

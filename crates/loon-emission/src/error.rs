@@ -1,5 +1,5 @@
-use thiserror::Error;
 use loon_core::CoreError;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum EmissionError {

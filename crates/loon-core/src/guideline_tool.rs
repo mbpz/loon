@@ -1,8 +1,8 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use crate::GuidelineId;
 use crate::GuidelineToolAssociationId;
 use crate::ToolId;
-use crate::GuidelineId;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GuidelineToolAssociation {

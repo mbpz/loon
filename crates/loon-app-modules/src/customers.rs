@@ -79,11 +79,7 @@ mod tests {
         async fn read(&self, id: &CustomerId) -> CoreResult<Option<Customer>> {
             Ok(self.data.lock().get(id).cloned())
         }
-        async fn update(
-            &self,
-            id: &CustomerId,
-            p: CustomerUpdateParams,
-        ) -> CoreResult<Customer> {
+        async fn update(&self, id: &CustomerId, p: CustomerUpdateParams) -> CoreResult<Customer> {
             let mut g = self.data.lock();
             let c = g.get_mut(id).unwrap();
             if let Some(n) = p.name {

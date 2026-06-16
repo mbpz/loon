@@ -37,7 +37,9 @@ async fn handle_socket(socket: WebSocket) {
                             r#"{"type":"agent_message","delta":"Hello!"}"#.into(),
                         ))
                         .await;
-                    let _ = sender.send(Message::Text(r#"{"type":"done"}"#.into())).await;
+                    let _ = sender
+                        .send(Message::Text(r#"{"type":"done"}"#.into()))
+                        .await;
                 }
             }
         }
@@ -46,7 +48,6 @@ async fn handle_socket(socket: WebSocket) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn module_compiles() {

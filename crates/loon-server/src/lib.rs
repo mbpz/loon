@@ -24,10 +24,12 @@ pub async fn run() -> anyhow::Result<()> {
     use std::time::Duration;
 
     let config = crate::config::Config::load()?;
-    let db = Arc::new(loon_persistence::backends::json_file::JsonFileDocumentDatabase::new(
-        Path::new(&config.persistence.root),
-        Duration::from_millis(config.persistence.flush_interval_ms),
-    )?);
+    let db = Arc::new(
+        loon_persistence::backends::json_file::JsonFileDocumentDatabase::new(
+            Path::new(&config.persistence.root),
+            Duration::from_millis(config.persistence.flush_interval_ms),
+        )?,
+    );
     let nlp_config = Arc::new(loon_nlp::NlpConfig {
         provider: "openai".into(),
         model: config.nlp.model.clone(),
@@ -37,8 +39,9 @@ pub async fn run() -> anyhow::Result<()> {
         timeout: Duration::from_millis(config.nlp.timeout_ms),
         temperature: 0.2,
     });
-    let nlp: Arc<dyn loon_nlp::NlpService> =
-        Arc::new(loon_nlp::providers::openai_provider::OpenAiProvider::new(nlp_config));
+    let nlp: Arc<dyn loon_nlp::NlpService> = Arc::new(
+        loon_nlp::providers::openai_provider::OpenAiProvider::new(nlp_config),
+    );
     let server = loon_sdk::Server::builder()
         .with_document_db(db)
         .with_nlp_service(nlp)

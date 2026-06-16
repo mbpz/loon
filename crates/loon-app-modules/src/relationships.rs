@@ -32,10 +32,7 @@ impl RelationshipAppModule {
         self.store.create(r).await
     }
 
-    pub async fn read_relationship(
-        &self,
-        id: &RelationshipId,
-    ) -> CoreResult<Option<Relationship>> {
+    pub async fn read_relationship(&self, id: &RelationshipId) -> CoreResult<Option<Relationship>> {
         self.store.read(id).await
     }
 

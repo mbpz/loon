@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use parking_lot::RwLock;
 use crate::tracer::Tracer;
 use crate::JsonValue;
+use parking_lot::RwLock;
+use std::collections::HashMap;
 
 pub struct BasicTracer {
     pub id: String,

@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::{AgentId, CoreResult, Shot, ShotId};
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait ShotStore: Send + Sync {

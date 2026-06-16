@@ -56,7 +56,9 @@ pub struct ErasedSchematicGenerationResult {
 
 /// Adapter that wraps a typed `SchematicGenerator<T>` so it can be
 /// returned through an `Arc<dyn ErasedSchematicGenerator>`.
-pub struct TypedErasedSchematicGenerator<T: Schematic + serde::de::DeserializeOwned + Default + Send + 'static> {
+pub struct TypedErasedSchematicGenerator<
+    T: Schematic + serde::de::DeserializeOwned + Default + Send + 'static,
+> {
     pub schema: serde_json::Value,
     inner: Box<dyn SchematicGenerator<T>>,
 }

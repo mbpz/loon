@@ -96,7 +96,10 @@ mod tests {
         let a = JourneyNodeId::new();
         let b = JourneyNodeId::new();
         let c = JourneyNodeId::new();
-        let edges = vec![make_edge(a.clone(), b.clone()), make_edge(b.clone(), c.clone())];
+        let edges = vec![
+            make_edge(a.clone(), b.clone()),
+            make_edge(b.clone(), c.clone()),
+        ];
         let j = make_journey();
         let visited = reachable_nodes(&j, &edges, &a);
         assert_eq!(visited.len(), 3);

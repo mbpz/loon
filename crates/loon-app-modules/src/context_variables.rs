@@ -104,10 +104,7 @@ mod tests {
             self.data.lock().insert(id, v.clone());
             Ok(v)
         }
-        async fn read(
-            &self,
-            id: &ContextVariableId,
-        ) -> CoreResult<Option<ContextVariable>> {
+        async fn read(&self, id: &ContextVariableId) -> CoreResult<Option<ContextVariable>> {
             Ok(self.data.lock().get(id).cloned())
         }
         async fn update(

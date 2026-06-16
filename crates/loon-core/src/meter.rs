@@ -1,6 +1,6 @@
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use parking_lot::Mutex;
 
 pub struct Meter {
     counts: Mutex<HashMap<String, AtomicU64>>,

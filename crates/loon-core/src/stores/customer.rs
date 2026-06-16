@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::{CoreResult, Customer, CustomerId, CustomerUpdateParams, TagId};
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait CustomerStore: Send + Sync {

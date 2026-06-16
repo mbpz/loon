@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 
-use loon_core::{AgentId, Guideline, GuidelineContent};
+use loon_core::Guideline;
 
 use crate::error::EngineResult;
 
@@ -22,13 +22,14 @@ impl ToolRunningActionDetector for NoopToolRunningActionDetector {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use loon_core::{AgentId, GuidelineContent};
 
     fn _accepts(_: &dyn ToolRunningActionDetector) {}
 
     #[tokio::test]
     async fn noop_detector_returns_false() {
         let d = NoopToolRunningActionDetector;
-        let _ = _accepts(&d);
+        _accepts(&d);
         let g = Guideline::new(
             GuidelineContent {
                 condition: "c".into(),

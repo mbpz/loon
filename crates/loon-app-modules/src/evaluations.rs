@@ -32,10 +32,7 @@ impl EvaluationAppModule {
         self.store.create(o).await
     }
 
-    pub async fn read_observation(
-        &self,
-        id: &EvaluationId,
-    ) -> CoreResult<Option<Observation>> {
+    pub async fn read_observation(&self, id: &EvaluationId) -> CoreResult<Option<Observation>> {
         self.store.read(id).await
     }
 
@@ -43,10 +40,7 @@ impl EvaluationAppModule {
         self.store.delete(id).await
     }
 
-    pub async fn list_observations(
-        &self,
-        agent_id: &AgentId,
-    ) -> CoreResult<Vec<Observation>> {
+    pub async fn list_observations(&self, agent_id: &AgentId) -> CoreResult<Vec<Observation>> {
         self.store.list(agent_id).await
     }
 }

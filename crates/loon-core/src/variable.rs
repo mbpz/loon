@@ -1,9 +1,9 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use crate::common::JsonValue;
+use crate::AgentId;
 use crate::ContextVariableId;
 use crate::TagId;
-use crate::AgentId;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FreshnessRule {
@@ -38,7 +38,9 @@ mod tests {
     use super::*;
     #[test]
     fn freshness_rule_no_max_age() {
-        let r = FreshnessRule { max_age_seconds: None };
+        let r = FreshnessRule {
+            max_age_seconds: None,
+        };
         assert!(r.max_age_seconds.is_none());
     }
 

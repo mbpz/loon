@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
+use crate::{AgentId, JourneyEdgeId, JourneyId, JourneyNodeId, JsonValue, TagId, ToolId};
 use chrono::{DateTime, Utc};
-use crate::{AgentId, JourneyId, JourneyNodeId, JourneyEdgeId, TagId, ToolId, JsonValue};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NodeKind {

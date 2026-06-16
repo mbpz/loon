@@ -1,7 +1,7 @@
+use crate::AgentId;
+use crate::ShotId;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::ShotId;
-use crate::AgentId;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Shot {

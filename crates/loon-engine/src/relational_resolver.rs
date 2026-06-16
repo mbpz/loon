@@ -49,7 +49,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use loon_core::{
-        AgentId, CoreError, CoreResult, Guideline, GuidelineContent, GuidelineId, Criticality,
+        AgentId, CoreError, CoreResult, Criticality, Guideline, GuidelineContent, GuidelineId,
         JsonValue, Relationship, RelationshipEntity, RelationshipEntityKind, RelationshipId,
         RelationshipKind, TagId,
     };
@@ -67,10 +67,7 @@ mod tests {
         async fn delete(&self, _id: &RelationshipId) -> CoreResult<()> {
             Ok(())
         }
-        async fn list_for(
-            &self,
-            _e: &RelationshipEntity,
-        ) -> CoreResult<Vec<Relationship>> {
+        async fn list_for(&self, _e: &RelationshipEntity) -> CoreResult<Vec<Relationship>> {
             Ok(vec![])
         }
     }

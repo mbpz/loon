@@ -2,17 +2,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::{
-    Agent, AgentId, Capability, CannedResponse, ContextVariable, ContextVariableId,
-    ContextVariableValue, CoreError, CoreResult, Customer, CustomerId, Event, Guideline,
-    GuidelineId, JsonValue, Journey, Session, SessionId, SessionUpdateParams, Term,
-    ToolInsights,
-};
 use crate::journey_guideline_projection::JourneyGuidelineProjection;
 use crate::stores::{
     AgentStore, CannedResponseStore, CapabilityStore, ContextVariableStore, CustomerStore,
-    GlossaryStore, GuidelineStore, GuidelineToolAssociationStore, JourneyStore,
-    RelationshipStore, RetrieverStore, SessionStore,
+    GlossaryStore, GuidelineStore, GuidelineToolAssociationStore, JourneyStore, RelationshipStore,
+    RetrieverStore, SessionStore,
+};
+use crate::{
+    Agent, AgentId, CannedResponse, Capability, ContextVariable, ContextVariableId,
+    ContextVariableValue, CoreError, CoreResult, Customer, CustomerId, Event, Guideline,
+    GuidelineId, Journey, JsonValue, Session, SessionId, SessionUpdateParams, Term, ToolInsights,
 };
 
 /// Read-side: domain-aware query methods backed by individual stores.
@@ -90,10 +89,7 @@ impl EntityQueries {
         self.glossary_store.list_terms(agent_id).await
     }
 
-    pub async fn find_journeys_for_context(
-        &self,
-        agent_id: &AgentId,
-    ) -> CoreResult<Vec<Journey>> {
+    pub async fn find_journeys_for_context(&self, agent_id: &AgentId) -> CoreResult<Vec<Journey>> {
         self.journey_store.list(agent_id).await
     }
 
@@ -130,11 +126,7 @@ pub struct EntityCommands {
 }
 
 impl EntityCommands {
-    pub async fn update_session(
-        &self,
-        id: &SessionId,
-        p: SessionUpdateParams,
-    ) -> CoreResult<()> {
+    pub async fn update_session(&self, id: &SessionId, p: SessionUpdateParams) -> CoreResult<()> {
         self.session_store.update(id, p).await.map(|_| ())
     }
 

@@ -1,14 +1,20 @@
-use serde::{Deserialize, Serialize};
+use crate::{AgentId, JsonValue, TagId};
 use chrono::{DateTime, Utc};
-use crate::{AgentId, TagId, JsonValue};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum CompositionMode { Fluid, Strict }
-impl Default for CompositionMode { fn default() -> Self { Self::Fluid } }
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CompositionMode {
+    #[default]
+    Fluid,
+    Strict,
+}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum MessageOutputMode { Fluid, Canned }
-impl Default for MessageOutputMode { fn default() -> Self { Self::Fluid } }
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MessageOutputMode {
+    #[default]
+    Fluid,
+    Canned,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Agent {
@@ -58,8 +64,10 @@ mod tests {
     }
     #[test]
     fn agent_update_params() {
-        let mut p = AgentUpdateParams::default();
-        p.name = Some("new".into());
+        let p = AgentUpdateParams {
+            name: Some("new".into()),
+            ..Default::default()
+        };
         assert_eq!(p.name.as_deref(), Some("new"));
         assert!(p.description.is_none());
     }

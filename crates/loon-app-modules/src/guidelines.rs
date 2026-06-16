@@ -38,7 +38,12 @@ impl GuidelineAppModule {
     }
 
     pub async fn create_guideline(&self, params: GuidelineCreateParams) -> CoreResult<Guideline> {
-        let g = Guideline::new(params.content, &params.agent_id, params.enabled, params.criticality);
+        let g = Guideline::new(
+            params.content,
+            &params.agent_id,
+            params.enabled,
+            params.criticality,
+        );
         self.store.create(g).await
     }
 
@@ -160,11 +165,7 @@ mod tests {
             self.data.lock().remove(id);
             Ok(())
         }
-        async fn list(
-            &self,
-            _agent_id: &AgentId,
-            _tags: &[TagId],
-        ) -> CoreResult<Vec<Guideline>> {
+        async fn list(&self, _agent_id: &AgentId, _tags: &[TagId]) -> CoreResult<Vec<Guideline>> {
             Ok(self.data.lock().values().cloned().collect())
         }
     }
@@ -187,20 +188,14 @@ mod tests {
             self.data.lock().insert(id, r.clone());
             Ok(r)
         }
-        async fn read(
-            &self,
-            id: &loon_core::RelationshipId,
-        ) -> CoreResult<Option<Relationship>> {
+        async fn read(&self, id: &loon_core::RelationshipId) -> CoreResult<Option<Relationship>> {
             Ok(self.data.lock().get(id).cloned())
         }
         async fn delete(&self, id: &loon_core::RelationshipId) -> CoreResult<()> {
             self.data.lock().remove(id);
             Ok(())
         }
-        async fn list_for(
-            &self,
-            entity: &RelationshipEntity,
-        ) -> CoreResult<Vec<Relationship>> {
+        async fn list_for(&self, entity: &RelationshipEntity) -> CoreResult<Vec<Relationship>> {
             Ok(self
                 .data
                 .lock()
@@ -238,10 +233,7 @@ mod tests {
         ) -> CoreResult<Option<GuidelineToolAssociation>> {
             Ok(self.data.lock().get(id).cloned())
         }
-        async fn delete(
-            &self,
-            id: &loon_core::GuidelineToolAssociationId,
-        ) -> CoreResult<()> {
+        async fn delete(&self, id: &loon_core::GuidelineToolAssociationId) -> CoreResult<()> {
             self.data.lock().remove(id);
             Ok(())
         }

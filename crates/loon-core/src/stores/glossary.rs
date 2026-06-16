@@ -1,7 +1,7 @@
-use async_trait::async_trait;
 use crate::{AgentId, CoreResult, Term};
+use async_trait::async_trait;
 
-pub use crate::glossary::{Glossary};
+pub use crate::glossary::Glossary;
 
 #[async_trait]
 pub trait GlossaryStore: Send + Sync {

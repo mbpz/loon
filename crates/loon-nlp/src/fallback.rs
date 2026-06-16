@@ -1,9 +1,7 @@
 use async_trait::async_trait;
 
 use crate::error::NlpResult;
-use crate::generator::{
-    SchematicGenerationOptions, SchematicGenerationResult, SchematicGenerator,
-};
+use crate::generator::{SchematicGenerationOptions, SchematicGenerationResult, SchematicGenerator};
 use crate::Schematic;
 
 pub struct FallbackSchematicGenerator<T: Schematic> {

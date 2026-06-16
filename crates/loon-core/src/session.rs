@@ -1,18 +1,13 @@
-use std::collections::{HashMap, HashSet};
-use serde::{Deserialize, Serialize};
+use crate::{AgentId, CustomerId, EventId, JsonValue, SessionId, ToolCallData};
 use chrono::{DateTime, Utc};
-use crate::{AgentId, CustomerId, SessionId, EventId, ToolCallData, JsonValue};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SessionMode {
+    #[default]
     Auto,
     Manual,
-}
-
-impl Default for SessionMode {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -89,7 +84,10 @@ pub struct Participant {
 
 impl Default for Participant {
     fn default() -> Self {
-        Self { id: "agent".into(), display_name: "Agent".into() }
+        Self {
+            id: "agent".into(),
+            display_name: "Agent".into(),
+        }
     }
 }
 
@@ -102,7 +100,11 @@ pub struct MessageEventData {
 
 impl MessageEventData {
     pub fn new(s: impl Into<String>) -> Self {
-        Self { message: s.into(), participant: Participant::default(), updated: false }
+        Self {
+            message: s.into(),
+            participant: Participant::default(),
+            updated: false,
+        }
     }
 }
 

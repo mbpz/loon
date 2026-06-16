@@ -3,8 +3,8 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::CoreResult;
 use crate::tool_service::ToolService;
+use crate::CoreResult;
 
 /// Registry mapping service name to a concrete service implementation.
 /// The phase-1 contract is `ToolService`; later stages may add

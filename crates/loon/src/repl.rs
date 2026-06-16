@@ -31,7 +31,7 @@ pub async fn run(server_url: &str, session_id: &str) -> anyhow::Result<()> {
         }
         let escaped = input.trim().replace('"', "\\\"");
         let msg = format!(r#"{{"type":"user_message","content":"{}"}}"#, escaped);
-        ws.send(Message::Text(msg.into())).await?;
+        ws.send(Message::Text(msg)).await?;
         input.clear();
         while let Some(Ok(msg)) = ws.next().await {
             if let Message::Text(t) = msg {

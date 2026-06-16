@@ -38,12 +38,18 @@ impl HealthReporter {
 
     /// Phase-1 stub: always reports `ok = true` with no components.
     pub async fn check(&self) -> EngineResult<HealthStatus> {
-        Ok(HealthStatus { ok: true, components: vec![] })
+        Ok(HealthStatus {
+            ok: true,
+            components: vec![],
+        })
     }
 
     /// Phase-1 stub: returns a constant "ok" view for the engine.
     pub async fn engine_view(&self) -> EngineResult<EngineHealthView> {
-        Ok(EngineHealthView { status: "ok".into(), metrics: Default::default() })
+        Ok(EngineHealthView {
+            status: "ok".into(),
+            metrics: Default::default(),
+        })
     }
 
     /// Reports the NLP provider from the configured `NlpService`.
@@ -56,7 +62,10 @@ impl HealthReporter {
 
     /// Phase-1 stub: returns zero lag for the event loop.
     pub async fn event_loop_view(&self) -> EngineResult<EventLoopHealthView> {
-        Ok(EventLoopHealthView { status: "ok".into(), lag_ms: 0 })
+        Ok(EventLoopHealthView {
+            status: "ok".into(),
+            lag_ms: 0,
+        })
     }
 }
 
@@ -65,10 +74,12 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use loon_core::async_utils::BoxFuture;
-    use loon_emission::{EmissionResult, EmittedEvent, EventEmitter, MessageEmitData, MessageEventHandle};
+    use loon_emission::{
+        EmissionResult, EmittedEvent, EventEmitter, MessageEmitData, MessageEventHandle,
+    };
     use loon_nlp::{
-        Embedder, ErasedSchematicGenerator, Moderater, NlpConfig, NlpResult, Tokenizer,
-        StreamingTextGenerator,
+        Embedder, ErasedSchematicGenerator, Moderater, NlpConfig, NlpResult,
+        StreamingTextGenerator, Tokenizer,
     };
 
     use crate::engine::{Engine, UtteranceRequest};
@@ -104,11 +115,7 @@ mod tests {
     struct StubEngine;
     #[async_trait]
     impl Engine for StubEngine {
-        async fn process(
-            &self,
-            _: &Context,
-            _: &dyn EventEmitter,
-        ) -> EngineResult<bool> {
+        async fn process(&self, _: &Context, _: &dyn EventEmitter) -> EngineResult<bool> {
             Ok(true)
         }
         async fn utter(
@@ -144,18 +151,30 @@ mod tests {
         struct CfgNlp(NlpConfig);
         #[async_trait]
         impl NlpService for CfgNlp {
-            fn config(&self) -> &NlpConfig { &self.0 }
-            async fn text_generator(&self) -> NlpResult<Box<dyn StreamingTextGenerator>> { unimplemented!() }
-            async fn schematic_generator(&self, _: serde_json::Value) -> NlpResult<Box<dyn ErasedSchematicGenerator>> { unimplemented!() }
-            async fn embedder(&self) -> NlpResult<Box<dyn Embedder>> { unimplemented!() }
-            async fn tokenizer(&self) -> NlpResult<Box<dyn Tokenizer>> { unimplemented!() }
-            async fn moderater(&self) -> NlpResult<Box<dyn Moderater>> { unimplemented!() }
+            fn config(&self) -> &NlpConfig {
+                &self.0
+            }
+            async fn text_generator(&self) -> NlpResult<Box<dyn StreamingTextGenerator>> {
+                unimplemented!()
+            }
+            async fn schematic_generator(
+                &self,
+                _: serde_json::Value,
+            ) -> NlpResult<Box<dyn ErasedSchematicGenerator>> {
+                unimplemented!()
+            }
+            async fn embedder(&self) -> NlpResult<Box<dyn Embedder>> {
+                unimplemented!()
+            }
+            async fn tokenizer(&self) -> NlpResult<Box<dyn Tokenizer>> {
+                unimplemented!()
+            }
+            async fn moderater(&self) -> NlpResult<Box<dyn Moderater>> {
+                unimplemented!()
+            }
         }
 
-        let reporter = HealthReporter::new(
-            Arc::new(StubEngine),
-            Arc::new(CfgNlp(nlp_cfg)),
-        );
+        let reporter = HealthReporter::new(Arc::new(StubEngine), Arc::new(CfgNlp(nlp_cfg)));
         let status = reporter.check().await.unwrap();
         assert!(status.ok);
         let ev = reporter.engine_view().await.unwrap();
@@ -169,11 +188,12 @@ mod tests {
         _accepts_nlp(&DummyNlp);
         let _: MessageEmitData = MessageEmitData::Simple("x".into());
         let _: HashMap<String, serde_json::Value> = HashMap::new();
-        _accepts_ee;
-        _accepts_eng;
-        _accepts_handle;
-        _accepts_evt;
-        _accepts_result;
-        let _: BoxFuture<'static, EngineResult<()>> = Box::pin(async { Ok(()) });
+        let _ = &_accepts_ee;
+        let _ = &_accepts_eng;
+        let _ = &_accepts_handle;
+        let _ = &_accepts_evt;
+        let _ = &_accepts_result;
+        #[allow(clippy::let_underscore_future)]
+        let _ = Box::pin(async { Ok(()) }) as BoxFuture<'static, EngineResult<()>>;
     }
 }

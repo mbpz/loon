@@ -151,8 +151,8 @@ impl<T: Schematic> SchematicGenerator<T> for OpenAiSchematicGenerator<T> {
             .map(|c| c.message.content.clone())
             .ok_or_else(|| NlpError::Upstream("no choices returned".into()))?;
 
-        let value: T = serde_json::from_str(&content)
-            .map_err(|e| NlpError::InvalidSchema(e.to_string()))?;
+        let value: T =
+            serde_json::from_str(&content).map_err(|e| NlpError::InvalidSchema(e.to_string()))?;
 
         let info = GenerationInfo {
             model: self.config.model.clone(),

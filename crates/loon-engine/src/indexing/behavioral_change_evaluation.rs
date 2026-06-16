@@ -3,7 +3,7 @@
 
 use async_trait::async_trait;
 
-use loon_core::{AgentId, Criticality, Guideline, GuidelineContent};
+use loon_core::{AgentId, Guideline, GuidelineContent};
 
 use super::common::BehavioralChangeEvaluation;
 use crate::error::EngineResult;
@@ -43,7 +43,7 @@ mod tests {
     #[tokio::test]
     async fn noop_evaluator_returns_zero_impact() {
         let e = NoopBehavioralChangeEvaluation;
-        let _ = _accepts(&e);
+        _accepts(&e);
         let g = Guideline::new(
             GuidelineContent {
                 condition: "c".into(),
@@ -56,6 +56,5 @@ mod tests {
         );
         let res = e.evaluate(&g).await.unwrap();
         assert_eq!(res.estimated_impact, 0.0);
-        let _: Criticality = Criticality::Low;
     }
 }

@@ -84,7 +84,10 @@ impl MessageGenerator {
         &self,
         _ctx: &EngineContext,
     ) -> EngineResult<Pin<Box<dyn Stream<Item = EngineResult<String>> + Send>>> {
-        let s = stream::iter(vec![Ok("Hello, ".to_string()), Ok("how can I help?".to_string())]);
+        let s = stream::iter(vec![
+            Ok("Hello, ".to_string()),
+            Ok("how can I help?".to_string()),
+        ]);
         Ok(Box::pin(s))
     }
 }
@@ -96,15 +99,13 @@ mod tests {
     use loon_core::async_utils::BoxFuture;
     use loon_core::basic_tracer::BasicTracer;
     use loon_core::console_logger::ConsoleLogger;
-    use loon_core::{
-        AgentId, Customer, Session, SessionId, StatusEventData, ToolEventData,
-    };
+    use loon_core::{AgentId, Customer, Session, SessionId, StatusEventData, ToolEventData};
     use loon_emission::{
         EmissionResult, EmittedEvent, EventEmitter, MessageEmitData, MessageEventHandle,
     };
     use loon_nlp::{
-        Embedder, ErasedSchematicGenerator, Moderater, NlpConfig, NlpResult, Tokenizer,
-        StreamingTextGenerator,
+        Embedder, ErasedSchematicGenerator, Moderater, NlpConfig, NlpResult,
+        StreamingTextGenerator, Tokenizer,
     };
     use std::collections::HashMap;
 

@@ -10,7 +10,7 @@ use loon_core::{
 };
 use loon_nlp::Tokenizer;
 
-use crate::engine_context::{EngineContext, GuidelineMatch, Interaction};
+use crate::engine_context::{GuidelineMatch, Interaction};
 use crate::error::EngineResult;
 
 /// Builds prompts for the LLM under a fixed token budget.
@@ -81,8 +81,8 @@ impl PromptBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loon_core::{AgentId, Guideline, GuidelineContent};
     use async_trait::async_trait;
+    use loon_core::{AgentId, Guideline, GuidelineContent};
 
     struct WsTok;
     #[async_trait]
@@ -135,7 +135,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(prompt.contains("say hi back"), "prompt missing action: {prompt}");
+        assert!(
+            prompt.contains("say hi back"),
+            "prompt missing action: {prompt}"
+        );
         assert!(prompt.contains("user greets"));
     }
 }

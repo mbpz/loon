@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use crate::logger::{LogLevel, Logger};
 use crate::JsonValue;
+use std::collections::HashMap;
 
 pub struct ConsoleLogger;
 

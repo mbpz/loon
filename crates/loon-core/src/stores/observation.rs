@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use crate::{AgentId, CoreResult, EvaluationId, Observation};
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait EvaluationStore: Send + Sync {
