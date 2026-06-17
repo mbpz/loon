@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use loon_core::{
     Agent, AgentId, Customer, Event, EventKind, EventSource, Journey, JsonValue, Logger, Session,
     SessionId, Stopwatch, ToolId, ToolResult, Tracer,
@@ -149,6 +150,38 @@ impl Clone for EngineContext {
 }
 
 impl EngineContext {
+    /// Build a no-op `EngineContext` for tests / placeholder
+    /// callers. Every field is populated with a no-op default
+    /// (a fresh `Agent`, empty `Customer`, empty `Session`, empty
+    /// `Interaction`, and a pair of stub emitters).
+    pub fn placeholder() -> Self {
+        use loon_core::basic_tracer::BasicTracer;
+        use loon_core::console_logger::ConsoleLogger;
+
+        let agent_id = loon_core::AgentId::new();
+        let session_id = loon_core::SessionId::new();
+        let agent = loon_core::Agent::new("placeholder", "placeholder");
+        let customer = loon_core::Customer::new("placeholder");
+        let session = loon_core::Session::new(&agent_id);
+        let emitter: Arc<dyn loon_emission::EventEmitter> = Arc::new(NoopEmitter);
+        Self {
+            info: Context {
+                session_id,
+                agent_id,
+            },
+            logger: Arc::new(ConsoleLogger),
+            tracer: Arc::new(BasicTracer::new()),
+            agent,
+            customer,
+            session,
+            session_event_emitter: emitter.clone(),
+            response_event_emitter: emitter,
+            interaction: Interaction::new(vec![]),
+            state: parking_lot::Mutex::new(ResponseState::default()),
+            creation: loon_core::Stopwatch::start(),
+        }
+    }
+
     /// Phase-1 stub: real implementation will emit a tool event via
     /// `response_event_emitter` once preparation is wired up.
     pub async fn add_tool_event(
@@ -158,6 +191,79 @@ impl EngineContext {
         _result: ToolResult,
     ) -> EngineResult<()> {
         Ok(())
+    }
+}
+
+/// No-op `EventEmitter` used by `EngineContext::placeholder`.
+struct NoopEmitter;
+#[async_trait]
+impl loon_emission::EventEmitter for NoopEmitter {
+    async fn emit_status_event(
+        &self,
+        _trace_id: &str,
+        _data: loon_core::StatusEventData,
+        _metadata: Option<std::collections::HashMap<String, loon_core::JsonValue>>,
+    ) -> loon_emission::EmissionResult<loon_emission::EmittedEvent> {
+        Ok(loon_emission::EmittedEvent {
+            source: loon_core::EventSource::System,
+            kind: loon_core::EventKind::Status,
+            trace_id: String::new(),
+            data: loon_core::JsonValue::Null,
+            metadata: None,
+        })
+    }
+    async fn emit_message_event(
+        &self,
+        _trace_id: &str,
+        _data: loon_emission::MessageEmitData,
+        _metadata: Option<std::collections::HashMap<String, loon_core::JsonValue>>,
+    ) -> loon_emission::EmissionResult<loon_emission::MessageEventHandle> {
+        use loon_core::async_utils::BoxFuture;
+        let update: loon_emission::EventUpdater = std::sync::Arc::new(|_d| {
+            let fut: BoxFuture<'static, loon_emission::EmissionResult<loon_emission::MessageEventHandle>> =
+                Box::pin(async {
+                    Err(loon_emission::EmissionError::Serialization("noop".into()))
+                });
+            fut
+        });
+        Ok(loon_emission::MessageEventHandle {
+            event: loon_emission::EmittedEvent {
+                source: loon_core::EventSource::AiAgent,
+                kind: loon_core::EventKind::Message,
+                trace_id: String::new(),
+                data: loon_core::JsonValue::Null,
+                metadata: None,
+            },
+            update,
+        })
+    }
+    async fn emit_tool_event(
+        &self,
+        _trace_id: &str,
+        _data: loon_core::ToolEventData,
+        _metadata: Option<std::collections::HashMap<String, loon_core::JsonValue>>,
+    ) -> loon_emission::EmissionResult<loon_emission::EmittedEvent> {
+        Ok(loon_emission::EmittedEvent {
+            source: loon_core::EventSource::System,
+            kind: loon_core::EventKind::Tool,
+            trace_id: String::new(),
+            data: loon_core::JsonValue::Null,
+            metadata: None,
+        })
+    }
+    async fn emit_custom_event(
+        &self,
+        _trace_id: &str,
+        _data: loon_core::JsonValue,
+        _metadata: Option<std::collections::HashMap<String, loon_core::JsonValue>>,
+    ) -> loon_emission::EmissionResult<loon_emission::EmittedEvent> {
+        Ok(loon_emission::EmittedEvent {
+            source: loon_core::EventSource::System,
+            kind: loon_core::EventKind::Custom,
+            trace_id: String::new(),
+            data: loon_core::JsonValue::Null,
+            metadata: None,
+        })
     }
 }
 

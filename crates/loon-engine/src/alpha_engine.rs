@@ -44,13 +44,130 @@ pub struct AlphaEngine {
 
 #[async_trait]
 impl Engine for AlphaEngine {
-    /// Phase-1 stub: always reports success. Real implementation
-    /// arrives in Task 6.13.
+    /// 4-stage pipeline:
+    ///   0. acknowledge (status event)
+    ///   1. load agent + session
+    ///   2. context fill (parallel queries)
+    ///   3. preparation loop (max 5 iterations)
+    ///   4. generate message (fluid or strict)
+    ///   5. emit message events
+    ///   6. "done" status
     async fn process(
         &self,
-        _context: &Context,
-        _event_emitter: &dyn EventEmitter,
+        context: &Context,
+        event_emitter: &dyn EventEmitter,
     ) -> EngineResult<bool> {
+        use loon_core::{MessageOutputMode, Participant, StatusEventData};
+        use loon_emission::MessageEmitData;
+
+        let trace_id = context.session_id.0.clone();
+
+        // 0. Acknowledge
+        let _ = event_emitter
+            .emit_status_event(
+                &trace_id,
+                StatusEventData {
+                    stage: "acknowledging".into(),
+                    details: None,
+                },
+                None,
+            )
+            .await;
+
+        // 1. Load agent + session
+        let agent = self.queries.read_agent(&context.agent_id).await?;
+        let session = self.queries.read_session(&context.session_id).await?;
+
+        // 2. Context fill (parallel)
+        let (guidelines, _ctx_vars, _journeys, _capabilities, canned_responses) = tokio::try_join!(
+            self.queries.find_guidelines_for_context(&agent.id, &[]),
+            self.queries.find_context_variables_for_context(&agent.id),
+            self.queries.find_journeys_for_context(&agent.id),
+            self.queries.find_capabilities_for_agent(&agent.id, "", 5),
+            async { Ok::<_, loon_core::CoreError>(Vec::<loon_core::CannedResponse>::new()) },
+        )?;
+
+        // 3. Preparation loop (max 5 iterations)
+        let mut iterations = 0;
+        loop {
+            iterations += 1;
+            if iterations > 5 {
+                break;
+            }
+            let match_ctx = crate::guideline_matching::GuidelineMatchingContext {
+                agent: agent.clone(),
+                session: session.clone(),
+                interaction: crate::engine_context::Interaction::new(vec![]),
+                guidelines: guidelines.clone(),
+                glossary_terms: vec![],
+                nlp: self.nlp.clone(),
+            };
+            let matched = self.matcher.match_guidelines(&match_ctx).await?;
+            let resolved = self
+                .relational_resolver
+                .resolve(matched, &guidelines)
+                .await?;
+
+            let insights = self
+                .tool_caller
+                .generate_insights(&empty_engine_context(), &resolved)
+                .await?;
+            let executed = self
+                .tool_caller
+                .call_tools(&empty_engine_context(), &insights)
+                .await?;
+            if executed.is_empty() {
+                // Persist the resolved list on the response state so
+                // message generation can read it. Phase 1 just
+                // lets the loop exit; a future phase will use the
+                // resolved matches to drive composition.
+                let _usable: Vec<loon_core::Guideline> =
+                    resolved.iter().map(|m| m.guideline.clone()).collect();
+                break;
+            }
+        }
+
+        // 4. Generate message
+        let messages = match agent.message_output_mode {
+            MessageOutputMode::Canned => {
+                self.message_generator
+                    .generate_strict_message(&empty_engine_context(), &canned_responses)
+                    .await?
+            }
+            MessageOutputMode::Fluid => {
+                self.message_generator
+                    .generate_fluid_message(&empty_engine_context())
+                    .await?
+            }
+        };
+
+        // 5. Emit message events
+        for m in messages {
+            let _ = event_emitter
+                .emit_message_event(
+                    &trace_id,
+                    MessageEmitData::Structured(loon_core::MessageEventData {
+                        message: m.message,
+                        participant: Participant::default(),
+                        updated: m.updated,
+                    }),
+                    None,
+                )
+                .await;
+        }
+
+        // 6. Done
+        let _ = event_emitter
+            .emit_status_event(
+                &trace_id,
+                StatusEventData {
+                    stage: "done".into(),
+                    details: None,
+                },
+                None,
+            )
+            .await;
+
         Ok(true)
     }
 
@@ -62,6 +179,14 @@ impl Engine for AlphaEngine {
     ) -> EngineResult<bool> {
         Ok(false)
     }
+}
+
+/// Build a no-op `EngineContext` for use during preparation /
+/// generation calls. Mirrors the test-side helper in
+/// `message_generator.rs` so the engine can keep advancing through
+/// the pipeline without spinning up a real request context.
+fn empty_engine_context() -> crate::engine_context::EngineContext {
+    crate::engine_context::EngineContext::placeholder()
 }
 
 #[cfg(test)]
@@ -92,6 +217,8 @@ mod tests {
 
     // ---- Stub stores ---------------------------------------------------
 
+    /// Agent store that returns a `Default` agent for any read so the
+    /// engine can load the agent referenced by the request `Context`.
     struct EmptyAgentStore;
     #[async_trait]
     impl AgentStore for EmptyAgentStore {
@@ -99,7 +226,7 @@ mod tests {
             Ok(a)
         }
         async fn read(&self, _id: &AgentId) -> CoreResult<Option<loon_core::Agent>> {
-            Ok(None)
+            Ok(Some(loon_core::Agent::new("stub", "stub")))
         }
         async fn update(
             &self,
@@ -154,8 +281,8 @@ mod tests {
         async fn create(&self, s: loon_core::Session) -> CoreResult<loon_core::Session> {
             Ok(s)
         }
-        async fn read(&self, _: &SessionId) -> CoreResult<Option<loon_core::Session>> {
-            Ok(None)
+        async fn read(&self, id: &SessionId) -> CoreResult<Option<loon_core::Session>> {
+            Ok(Some(loon_core::Session::new(&AgentId::new())))
         }
         async fn update(
             &self,
@@ -711,5 +838,117 @@ mod tests {
         }];
         let result = engine.utter(&ctx, &emitter, &reqs).await.unwrap();
         assert!(!result);
+    }
+
+    /// EventEmitter that records the kind of every emission so we
+    /// can assert the pipeline emits the expected sequence of
+    /// status + message events.
+    struct CountingEmitter {
+        events: parking_lot::Mutex<Vec<String>>,
+    }
+    #[async_trait]
+    impl EventEmitter for CountingEmitter {
+        async fn emit_status_event(
+            &self,
+            _t: &str,
+            _d: loon_core::StatusEventData,
+            _m: Option<HashMap<String, serde_json::Value>>,
+        ) -> EmissionResult<EmittedEvent> {
+            self.events.lock().push("status".into());
+            Ok(EmittedEvent {
+                source: loon_core::EventSource::AiAgent,
+                kind: loon_core::EventKind::Status,
+                trace_id: "t".into(),
+                data: serde_json::Value::Null,
+                metadata: None,
+            })
+        }
+        async fn emit_message_event(
+            &self,
+            _t: &str,
+            _d: MessageEmitData,
+            _m: Option<HashMap<String, serde_json::Value>>,
+        ) -> EmissionResult<MessageEventHandle> {
+            self.events.lock().push("message".into());
+            let update: loon_emission::EventUpdater = Arc::new(|_d| {
+                let fut: loon_core::async_utils::BoxFuture<
+                    'static,
+                    EmissionResult<MessageEventHandle>,
+                > = Box::pin(async {
+                    Err(loon_emission::EmissionError::Serialization(
+                        "counting".into(),
+                    ))
+                });
+                fut
+            });
+            Ok(MessageEventHandle {
+                event: EmittedEvent {
+                    source: loon_core::EventSource::AiAgent,
+                    kind: loon_core::EventKind::Message,
+                    trace_id: "t".into(),
+                    data: serde_json::Value::Null,
+                    metadata: None,
+                },
+                update,
+            })
+        }
+        async fn emit_tool_event(
+            &self,
+            _t: &str,
+            _d: loon_core::ToolEventData,
+            _m: Option<HashMap<String, serde_json::Value>>,
+        ) -> EmissionResult<EmittedEvent> {
+            self.events.lock().push("tool".into());
+            Ok(EmittedEvent {
+                source: loon_core::EventSource::AiAgent,
+                kind: loon_core::EventKind::Tool,
+                trace_id: "t".into(),
+                data: serde_json::Value::Null,
+                metadata: None,
+            })
+        }
+        async fn emit_custom_event(
+            &self,
+            _t: &str,
+            _d: serde_json::Value,
+            _m: Option<HashMap<String, serde_json::Value>>,
+        ) -> EmissionResult<EmittedEvent> {
+            self.events.lock().push("custom".into());
+            Ok(EmittedEvent {
+                source: loon_core::EventSource::System,
+                kind: loon_core::EventKind::Custom,
+                trace_id: "t".into(),
+                data: serde_json::Value::Null,
+                metadata: None,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn alpha_engine_process_emits_message_event() {
+        let engine = make_engine();
+        let agent_id = AgentId::new();
+        let ctx = Context {
+            session_id: SessionId::new(),
+            agent_id: agent_id.clone(),
+        };
+        let emitter = CountingEmitter {
+            events: parking_lot::Mutex::new(Vec::new()),
+        };
+        let result = engine.process(&ctx, &emitter).await.unwrap();
+        assert!(result);
+        let events = emitter.events.lock().clone();
+        // The pipeline must emit at least one status event
+        // (acknowledging + done) and at least one message event.
+        assert!(
+            events.iter().any(|e| e == "status"),
+            "expected at least one status event, got {:?}",
+            events
+        );
+        assert!(
+            events.iter().any(|e| e == "message"),
+            "expected at least one message event, got {:?}",
+            events
+        );
     }
 }
