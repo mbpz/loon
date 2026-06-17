@@ -22,6 +22,7 @@ use crate::filter::DocumentFilter;
 /// Migration step: transforms a single document from one version to the next.
 /// Each step is responsible for a single version bump.
 #[async_trait]
+#[allow(clippy::wrong_self_convention)]
 pub trait MigrationStep: Send + Sync {
     fn from_version(&self) -> &'static str;
     fn to_version(&self) -> &'static str;

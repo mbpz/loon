@@ -15,8 +15,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::document::{
-    BaseDocument, DeleteResult, Document, DocumentCollection, DocumentDatabase, DocumentLoader,
-    DocumentUpdate, InsertResult, UpdateResult,
+    BaseDocument, DeleteResult, Document, DocumentCollection, DocumentDatabase,
+    DocumentDatabaseHandle, DocumentLoader, DocumentUpdate, InsertResult, UpdateResult,
 };
 use crate::error::{PersistenceError, PersistenceResult};
 use crate::filter::DocumentFilter;
@@ -51,6 +51,17 @@ impl MongoDocumentDatabase {
 
     pub fn database(&self) -> &Database {
         &self.database
+    }
+}
+
+#[async_trait]
+impl DocumentDatabaseHandle for MongoDocumentDatabase {
+    async fn ping(&self) -> PersistenceResult<()> {
+        // Phase 9: lightweight reachability check. We don't issue a network
+        // round-trip here because this is called during server startup and
+        // MongoDB may be slow to respond when the topology is degraded.
+        // A real readiness check can be added later by calling `list_collection_names`.
+        Ok(())
     }
 }
 
