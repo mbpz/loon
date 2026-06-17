@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use loon_core::SessionId;
+use loon_core::{McpClient, SessionId};
 use loon_emission::EventEmitter;
 use loon_engine::engine_context::Context;
 use loon_engine::{Engine, EngineResult, UtteranceRequest};
@@ -56,6 +56,13 @@ pub struct ServerBuilder {
     /// wiring lands when `AlphaEngine` starts indexing vectors).
     #[allow(dead_code)]
     vector_db: Option<Arc<dyn loon_persistence::VectorDatabase>>,
+    /// MCP clients registered via
+    /// [`ServerBuilder::with_mcp_client`]. Phase 6 stores the
+    /// handles but does not yet wire them into the engine (real
+    /// wiring lands when `AlphaEngine` starts consuming MCP-provided
+    /// tools).
+    #[allow(dead_code)]
+    mcp_clients: Vec<Arc<McpClient>>,
 }
 
 impl ServerBuilder {
@@ -64,6 +71,7 @@ impl ServerBuilder {
             document_db_label: None,
             nlp_label: None,
             vector_db: None,
+            mcp_clients: Vec::new(),
         }
     }
 
@@ -95,6 +103,18 @@ impl ServerBuilder {
         db: Arc<VD>,
     ) -> Self {
         self.vector_db = Some(db);
+        self
+    }
+
+    /// Register an MCP server. Each MCP server becomes a tool
+    /// source the engine can reach.
+    ///
+    /// In Phase 6 the client is accepted and stored on the builder
+    /// but the engine does not yet consume its tool list (real
+    /// wiring lands when `AlphaEngine` learns about MCP-provided
+    /// tools).
+    pub fn with_mcp_client(mut self, client: Arc<McpClient>) -> Self {
+        self.mcp_clients.push(client);
         self
     }
 
@@ -245,6 +265,28 @@ mod tests {
         let vdb: Arc<InMemoryVectorDb> = Arc::new(InMemoryVectorDb);
         let server = Server::builder()
             .with_vector_db(vdb)
+            .build()
+            .await
+            .expect("build ok");
+        let _: Arc<dyn Engine> = server.engine.clone();
+    }
+
+    #[tokio::test]
+    async fn builder_accepts_mcp_client() {
+        // Phase 6: the builder records the MCP client handle but
+        // does not yet wire it into the engine. This test
+        // exercises the hook with a stub-friendly McpClient so
+        // the public API surface stays covered.
+        use loon_core::{McpClient, McpTransport};
+
+        let client: Arc<McpClient> = Arc::new(McpClient::new(
+            "test-server",
+            McpTransport::Http {
+                url: "http://x".into(),
+            },
+        ));
+        let server = Server::builder()
+            .with_mcp_client(client)
             .build()
             .await
             .expect("build ok");
