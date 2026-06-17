@@ -6,7 +6,7 @@ use axum::{routing::get, Router, middleware};
 use loon_sdk::Server;
 
 use crate::auth::AuthProvider;
-use crate::middleware::rate_limit::{RateLimiter, RateLimitConfig, rate_limit_middleware};
+use crate::middleware::rate_limit::{RateLimiter, rate_limit_middleware};
 
 /// State injected into every Axum handler via
 /// `axum::extract::State`.
@@ -16,8 +16,10 @@ pub struct AppState {
     pub rate_limiter: Arc<RateLimiter>,
 }
 
-/// Build the root [`Router`] with the liveness routes + a
-/// representative set of v1 resource routes wired in.
+/// Build the root [`Router`] with the liveness routes + every v1
+/// resource route wired in. Each resource exposes `GET` (list) and
+/// `POST` (create) handlers; real persistence lands in a later
+/// phase.
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(crate::routes::health::health))
@@ -30,6 +32,20 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/v1/guidelines",
             get(crate::routes::guidelines::list_guidelines)
                 .post(crate::routes::guidelines::create_guideline),
+        )
+        .route(
+            "/v1/journeys",
+            get(crate::routes::journeys::list_journeys)
+                .post(crate::routes::journeys::create_journey),
+        )
+        .route(
+            "/v1/tools",
+            get(crate::routes::tools::list_tools).post(crate::routes::tools::create_tool),
+        )
+        .route(
+            "/v1/observations",
+            get(crate::routes::observations::list_observations)
+                .post(crate::routes::observations::create_observation),
         )
         .route(
             "/v1/sessions",
@@ -46,31 +62,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/v1/relationships",
             get(crate::routes::relationships::list_relationships),
         )
-        // ---- Phase 1 stubs (return 501 NOT_IMPLEMENTED) ----
-        .route(
-            "/v1/canned-responses",
-            get(crate::routes::canned_responses::list_canned_responses)
-                .post(crate::routes::canned_responses::create_canned_response),
-        )
         .route(
             "/v1/glossary",
             get(crate::routes::glossary::list_glossary),
         )
         .route(
-            "/v1/journeys",
-            get(crate::routes::journeys::list_journeys)
-                .post(crate::routes::journeys::create_journey),
+            "/v1/canned_responses",
+            get(crate::routes::canned_responses::list_canned_responses),
         )
-        .route(
-            "/v1/observations",
-            get(crate::routes::observations::list_observations)
-                .post(crate::routes::observations::create_observation),
-        )
-        .route(
-            "/v1/tools",
-            get(crate::routes::tools::list_tools),
-        )
-        // ---- end Phase 1 stubs ----
         .route("/v1/sessions/{id}/chat", get(crate::routes::chat::chat_ws))
         .route_layer(middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
         .with_state(state)
