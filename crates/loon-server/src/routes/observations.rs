@@ -1,37 +1,42 @@
 //! `observations` resource routes.
+//!
+//! Backed by `EvaluationStore` — `Observation` is stored under the
+//! evaluation graph in core. Phase 5: there is no `update` method
+//! on `EvaluationStore`, so the PATCH handler returns 400.
 
-use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
-    http::StatusCode,
     Json,
+    extract::{Path, Query, State},
+    http::StatusCode,
 };
-use parking_lot::Mutex;
 use serde::Deserialize;
 
 use crate::api::common::{ApiError, ApiListResponse, ApiResponse};
 use crate::app::AppState;
+use loon_core::{AgentId, EvaluationId};
 use loon_sdk::Observation;
 
-// Phase 1 stub store keyed by EvaluationId (Observation::id). Real persistence lands later.
-static OBSERVATIONS: OnceLock<Arc<Mutex<HashMap<String, serde_json::Value>>>> = OnceLock::new();
-fn observation_store() -> Arc<Mutex<HashMap<String, serde_json::Value>>> {
-    OBSERVATIONS
-        .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
-        .clone()
+#[derive(Debug, Deserialize)]
+pub struct ListObservationsQuery {
+    pub agent_id: Option<String>,
 }
 
 pub async fn list_observations(
-    State(_s): State<Arc<AppState>>,
+    Query(q): Query<ListObservationsQuery>,
+    State(s): State<Arc<AppState>>,
 ) -> Result<Json<ApiListResponse<Observation>>, ApiError> {
-    let store_arc = observation_store();
-    let store = store_arc.lock();
-    let items: Vec<Observation> = store
-        .values()
-        .filter_map(|v| serde_json::from_value(v.clone()).ok())
-        .collect();
+    let items = match q.agent_id {
+        Some(id) => s
+            .server
+            .queries
+            .evaluation_store
+            .list(&AgentId(id))
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?,
+        None => Vec::new(),
+    };
     Ok(Json(ApiListResponse {
         total: items.len(),
         items,
@@ -40,7 +45,7 @@ pub async fn list_observations(
 
 #[derive(Debug, Deserialize)]
 pub struct CreateObservationRequest {
-    pub agent_id: loon_core::AgentId,
+    pub agent_id: AgentId,
     #[serde(default)]
     pub condition: String,
     #[serde(default)]
@@ -48,74 +53,132 @@ pub struct CreateObservationRequest {
 }
 
 pub async fn create_observation(
-    State(_s): State<Arc<AppState>>,
+    State(s): State<Arc<AppState>>,
     Json(req): Json<CreateObservationRequest>,
 ) -> Result<Json<ApiResponse<Observation>>, ApiError> {
     let o = Observation::new(req.condition, req.tools, &req.agent_id);
-    let store_arc = observation_store();
-    let mut store = store_arc.lock();
-    let value = serde_json::to_value(&o).map_err(|e| ApiError::Internal(e.to_string()))?;
-    store.insert(o.id.0.clone(), value);
-    Ok(Json(ApiResponse { data: o, meta: None }))
+    let stored = s
+        .server
+        .queries
+        .evaluation_store
+        .create(o)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(ApiResponse {
+        data: stored,
+        meta: None,
+    }))
 }
 
 pub async fn read_observation(
     Path(id): Path<String>,
-    State(_s): State<Arc<AppState>>,
+    State(s): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<Observation>>, ApiError> {
-    let store_arc = observation_store();
-    let store = store_arc.lock();
-    let value = store
-        .get(&id)
-        .cloned()
-        .ok_or_else(|| ApiError::NotFound(format!("observation {id}"), "OBSERVATION_NOT_FOUND".into()))?;
-    let o: Observation =
-        serde_json::from_value(value).map_err(|e| ApiError::Internal(e.to_string()))?;
-    Ok(Json(ApiResponse { data: o, meta: None }))
+    let oid = EvaluationId(id.clone());
+    let o = s
+        .server
+        .queries
+        .evaluation_store
+        .read(&oid)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::NotFound(
+                format!("observation {id}"),
+                "OBSERVATION_NOT_FOUND".into(),
+            )
+        })?;
+    Ok(Json(ApiResponse {
+        data: o,
+        meta: None,
+    }))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateObservationRequest {
-    pub condition: Option<String>,
-    pub tools: Option<Vec<loon_core::ToolId>>,
-    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub _unused: Option<String>,
 }
 
 pub async fn update_observation(
-    Path(id): Path<String>,
+    Path(_id): Path<String>,
     State(_s): State<Arc<AppState>>,
-    Json(req): Json<UpdateObservationRequest>,
+    Json(_req): Json<UpdateObservationRequest>,
 ) -> Result<Json<ApiResponse<Observation>>, ApiError> {
-    let store_arc = observation_store();
-    let mut store = store_arc.lock();
-    let value = store
-        .get(&id)
-        .cloned()
-        .ok_or_else(|| ApiError::NotFound(format!("observation {id}"), "OBSERVATION_NOT_FOUND".into()))?;
-    let mut o: Observation =
-        serde_json::from_value(value).map_err(|e| ApiError::Internal(e.to_string()))?;
-    if let Some(c) = req.condition {
-        o.condition = c;
-    }
-    if let Some(t) = req.tools {
-        o.tools = t;
-    }
-    if let Some(e) = req.enabled {
-        o.enabled = e;
-    }
-    let updated = serde_json::to_value(&o).map_err(|e| ApiError::Internal(e.to_string()))?;
-    store.insert(id, updated);
-    Ok(Json(ApiResponse { data: o, meta: None }))
+    Err(ApiError::InvalidArgument(
+        "observations do not support update".into(),
+        "OBSERVATION_UPDATE_NOT_SUPPORTED".into(),
+    ))
 }
 
 pub async fn delete_observation(
     Path(id): Path<String>,
-    State(_s): State<Arc<AppState>>,
+    State(s): State<Arc<AppState>>,
 ) -> Result<StatusCode, ApiError> {
-    let store_arc = observation_store();
-    let mut store = store_arc.lock();
-    store
-        .remove(&id)
-        .ok_or_else(|| ApiError::NotFound(format!("observation {id}"), "OBSERVATION_NOT_FOUND".into()))?;
+    let oid = EvaluationId(id);
+    s.server
+        .queries
+        .evaluation_store
+        .delete(&oid)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::NoopAuthProvider;
+    use crate::middleware::rate_limit::{RateLimitConfig, RateLimiter};
+
+    async fn test_app_state() -> Arc<AppState> {
+        let server = loon_sdk::Server::builder()
+            .build()
+            .await
+            .expect("build server");
+        Arc::new(AppState {
+            server: Arc::new(server),
+            auth: Arc::new(NoopAuthProvider),
+            rate_limiter: Arc::new(RateLimiter::new(RateLimitConfig::default())),
+        })
+    }
+
+    #[tokio::test]
+    async fn observation_create_read_delete() {
+        let state = test_app_state().await;
+        let agent_id = AgentId::new();
+
+        let created = create_observation(
+            State(state.clone()),
+            Json(CreateObservationRequest {
+                agent_id: agent_id.clone(),
+                condition: "spike in errors".into(),
+                tools: vec![],
+            }),
+        )
+        .await
+        .expect("create ok");
+        let id = created.data.id.0.clone();
+
+        let read = read_observation(Path(id.clone()), State(state.clone()))
+            .await
+            .expect("read ok");
+        assert_eq!(read.data.condition, "spike in errors");
+
+        let upd = update_observation(
+            Path(id.clone()),
+            State(state.clone()),
+            Json(UpdateObservationRequest { _unused: None }),
+        )
+        .await;
+        assert!(matches!(upd, Err(ApiError::InvalidArgument(_, _))));
+
+        let status = delete_observation(Path(id.clone()), State(state.clone()))
+            .await
+            .expect("delete ok");
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let read_missing = read_observation(Path(id), State(state)).await;
+        assert!(matches!(read_missing, Err(ApiError::NotFound(_, _))));
+    }
 }

@@ -750,6 +750,9 @@ mod tests {
             canned_response_store: Arc::new(EmptyCanned),
             capability_store: Arc::new(EmptyCap),
             retriever_store: Arc::new(EmptyRetriever),
+            tool_store: Arc::new(loon_core::stores::InMemoryToolStore::new()),
+            evaluation_store: Arc::new(loon_core::stores::InMemoryEvaluationStore::new()),
+            tag_store: Arc::new(loon_core::stores::InMemoryTagStore::new()),
             journey_guideline_projection: jgp,
         })
     }

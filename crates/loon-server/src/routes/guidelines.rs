@@ -1,37 +1,41 @@
 //! `guidelines` resource routes.
 
-use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
-    http::StatusCode,
     Json,
+    extract::{Path, Query, State},
+    http::StatusCode,
 };
-use parking_lot::Mutex;
 use serde::Deserialize;
 
 use crate::api::common::{ApiError, ApiListResponse, ApiResponse};
 use crate::app::AppState;
+use loon_core::{AgentId, CoreError, GuidelineId, GuidelineUpdateParams};
 use loon_sdk::{Guideline, GuidelineContent};
 
-// Phase 1 stub store keyed by GuidelineId. Real persistence lands later.
-static GUIDELINES: OnceLock<Arc<Mutex<HashMap<String, serde_json::Value>>>> = OnceLock::new();
-fn guideline_store() -> Arc<Mutex<HashMap<String, serde_json::Value>>> {
-    GUIDELINES
-        .get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
-        .clone()
+#[derive(Debug, Deserialize)]
+pub struct ListGuidelinesQuery {
+    pub agent_id: Option<String>,
 }
 
 pub async fn list_guidelines(
-    State(_s): State<Arc<AppState>>,
+    Query(q): Query<ListGuidelinesQuery>,
+    State(s): State<Arc<AppState>>,
 ) -> Result<Json<ApiListResponse<Guideline>>, ApiError> {
-    let store_arc = guideline_store();
-    let store = store_arc.lock();
-    let items: Vec<Guideline> = store
-        .values()
-        .filter_map(|v| serde_json::from_value(v.clone()).ok())
-        .collect();
+    // `GuidelineStore::list` is agent-scoped. Without an
+    // `?agent_id=...` query the route returns an empty list rather
+    // than scanning every agent.
+    let items = match q.agent_id {
+        Some(id) => s
+            .server
+            .queries
+            .guideline_store
+            .list(&AgentId(id), &[])
+            .await
+            .map_err(|e| ApiError::Internal(e.to_string()))?,
+        None => Vec::new(),
+    };
     Ok(Json(ApiListResponse {
         total: items.len(),
         items,
@@ -40,7 +44,7 @@ pub async fn list_guidelines(
 
 #[derive(Debug, Deserialize)]
 pub struct CreateGuidelineRequest {
-    pub agent_id: loon_core::AgentId,
+    pub agent_id: AgentId,
     #[serde(default)]
     pub condition: String,
     #[serde(default)]
@@ -50,7 +54,7 @@ pub struct CreateGuidelineRequest {
 }
 
 pub async fn create_guideline(
-    State(_s): State<Arc<AppState>>,
+    State(s): State<Arc<AppState>>,
     Json(req): Json<CreateGuidelineRequest>,
 ) -> Result<Json<ApiResponse<Guideline>>, ApiError> {
     let g = Guideline::new(
@@ -63,74 +67,163 @@ pub async fn create_guideline(
         true,
         0,
     );
-    let store_arc = guideline_store();
-    let mut store = store_arc.lock();
-    let value = serde_json::to_value(&g).map_err(|e| ApiError::Internal(e.to_string()))?;
-    store.insert(g.id.0.clone(), value);
-    Ok(Json(ApiResponse { data: g, meta: None }))
+    let stored = s
+        .server
+        .queries
+        .guideline_store
+        .create(g)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(ApiResponse {
+        data: stored,
+        meta: None,
+    }))
 }
 
 pub async fn read_guideline(
     Path(id): Path<String>,
-    State(_s): State<Arc<AppState>>,
+    State(s): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<Guideline>>, ApiError> {
-    let store_arc = guideline_store();
-    let store = store_arc.lock();
-    let value = store
-        .get(&id)
-        .cloned()
-        .ok_or_else(|| ApiError::NotFound(format!("guideline {id}"), "GUIDELINE_NOT_FOUND".into()))?;
-    let g: Guideline =
-        serde_json::from_value(value).map_err(|e| ApiError::Internal(e.to_string()))?;
-    Ok(Json(ApiResponse { data: g, meta: None }))
+    let gid = GuidelineId(id.clone());
+    let g = s
+        .server
+        .queries
+        .guideline_store
+        .read(&gid)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::NotFound(format!("guideline {id}"), "GUIDELINE_NOT_FOUND".into())
+        })?;
+    Ok(Json(ApiResponse {
+        data: g,
+        meta: None,
+    }))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateGuidelineRequest {
     pub condition: Option<String>,
     pub action: Option<String>,
-    pub description: Option<String>,
     pub enabled: Option<bool>,
 }
 
 pub async fn update_guideline(
     Path(id): Path<String>,
-    State(_s): State<Arc<AppState>>,
+    State(s): State<Arc<AppState>>,
     Json(req): Json<UpdateGuidelineRequest>,
 ) -> Result<Json<ApiResponse<Guideline>>, ApiError> {
-    let store_arc = guideline_store();
-    let mut store = store_arc.lock();
-    let value = store
-        .get(&id)
-        .cloned()
-        .ok_or_else(|| ApiError::NotFound(format!("guideline {id}"), "GUIDELINE_NOT_FOUND".into()))?;
-    let mut g: Guideline =
-        serde_json::from_value(value).map_err(|e| ApiError::Internal(e.to_string()))?;
-    if let Some(c) = req.condition {
-        g.content.condition = c;
-    }
-    if let Some(a) = req.action {
-        g.content.action = a;
-    }
-    if let Some(d) = req.description {
-        g.content.description = Some(d);
-    }
-    if let Some(e) = req.enabled {
-        g.enabled = e;
-    }
-    let updated = serde_json::to_value(&g).map_err(|e| ApiError::Internal(e.to_string()))?;
-    store.insert(id, updated);
-    Ok(Json(ApiResponse { data: g, meta: None }))
+    let gid = GuidelineId(id.clone());
+    let updated = s
+        .server
+        .queries
+        .guideline_store
+        .update(
+            &gid,
+            GuidelineUpdateParams {
+                condition: req.condition,
+                action: req.action,
+                enabled: req.enabled,
+            },
+        )
+        .await
+        .map_err(|e| match e {
+            CoreError::NotFound(_) => {
+                ApiError::NotFound(format!("guideline {id}"), "GUIDELINE_NOT_FOUND".into())
+            }
+            other => ApiError::Internal(other.to_string()),
+        })?;
+    Ok(Json(ApiResponse {
+        data: updated,
+        meta: None,
+    }))
 }
 
 pub async fn delete_guideline(
     Path(id): Path<String>,
-    State(_s): State<Arc<AppState>>,
+    State(s): State<Arc<AppState>>,
 ) -> Result<StatusCode, ApiError> {
-    let store_arc = guideline_store();
-    let mut store = store_arc.lock();
-    store
-        .remove(&id)
-        .ok_or_else(|| ApiError::NotFound(format!("guideline {id}"), "GUIDELINE_NOT_FOUND".into()))?;
+    let gid = GuidelineId(id);
+    s.server
+        .queries
+        .guideline_store
+        .delete(&gid)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::NoopAuthProvider;
+    use crate::middleware::rate_limit::{RateLimitConfig, RateLimiter};
+
+    async fn test_app_state() -> Arc<AppState> {
+        let server = loon_sdk::Server::builder()
+            .build()
+            .await
+            .expect("build server");
+        Arc::new(AppState {
+            server: Arc::new(server),
+            auth: Arc::new(NoopAuthProvider),
+            rate_limiter: Arc::new(RateLimiter::new(RateLimitConfig::default())),
+        })
+    }
+
+    #[tokio::test]
+    async fn guideline_full_lifecycle() {
+        let state = test_app_state().await;
+        let agent_id = AgentId::new();
+
+        let created = create_guideline(
+            State(state.clone()),
+            Json(CreateGuidelineRequest {
+                agent_id: agent_id.clone(),
+                condition: "user asks for help".into(),
+                action: "respond politely".into(),
+                description: None,
+            }),
+        )
+        .await
+        .expect("create ok");
+        let id = created.data.id.0.clone();
+
+        let listed = list_guidelines(
+            Query(ListGuidelinesQuery {
+                agent_id: Some(agent_id.0.clone()),
+            }),
+            State(state.clone()),
+        )
+        .await
+        .expect("list ok");
+        assert_eq!(listed.total, 1);
+
+        let read = read_guideline(Path(id.clone()), State(state.clone()))
+            .await
+            .expect("read ok");
+        assert_eq!(read.data.content.condition, "user asks for help");
+
+        let updated = update_guideline(
+            Path(id.clone()),
+            State(state.clone()),
+            Json(UpdateGuidelineRequest {
+                condition: Some("user is angry".into()),
+                action: None,
+                enabled: Some(false),
+            }),
+        )
+        .await
+        .expect("update ok");
+        assert_eq!(updated.data.content.condition, "user is angry");
+        assert!(!updated.data.enabled);
+
+        let status = delete_guideline(Path(id.clone()), State(state.clone()))
+            .await
+            .expect("delete ok");
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let read_missing = read_guideline(Path(id), State(state)).await;
+        assert!(matches!(read_missing, Err(ApiError::NotFound(_, _))));
+    }
 }
