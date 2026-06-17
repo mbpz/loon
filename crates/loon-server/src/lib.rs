@@ -8,12 +8,14 @@
 
 pub mod api;
 pub mod app;
+pub mod auth;
 pub mod config;
 pub mod middleware;
 pub mod routes;
 
 pub use api::common::*;
 pub use app::*;
+pub use auth::*;
 pub use config::*;
 
 /// Run the loon HTTP/WebSocket server using the current process
