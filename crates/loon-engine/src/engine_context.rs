@@ -312,4 +312,14 @@ mod tests {
         // Silence the unused warning on SessionId - prove it's reexported.
         let _id = SessionId::new();
     }
+
+    #[test]
+    fn placeholder_constructs_with_defaults() {
+        let ctx = EngineContext::placeholder();
+        assert_eq!(ctx.agent.name, "placeholder");
+        assert_eq!(ctx.customer.name, "placeholder");
+        // Verify state mutex initializes empty
+        assert!(ctx.state.lock().iterations.is_empty());
+        assert!(!ctx.state.lock().prepared_to_respond);
+    }
 }
