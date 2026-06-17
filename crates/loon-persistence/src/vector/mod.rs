@@ -26,6 +26,8 @@ pub struct VectorHit {
     pub metadata: JsonValue,
 }
 
+pub mod chroma;
+
 #[cfg(test)]
 mod tests {
     use super::*;
