@@ -38,7 +38,7 @@ impl RateLimiter {
         Self { config, buckets: Mutex::new(HashMap::new()) }
     }
 
-    pub fn check(&self, addr: &SocketAddr) -> Result<(), ()> {
+    pub fn check(&self, addr: &SocketAddr) -> Result<(), RateLimitError> {
         let now = Instant::now();
         let mut buckets = self.buckets.lock();
         let bucket = buckets.entry(*addr).or_insert_with(|| TokenBucket { tokens: self.config.burst as f64, last_refill: now });
@@ -47,8 +47,14 @@ impl RateLimiter {
         let refill = (elapsed / 60.0) * self.config.requests_per_minute as f64;
         bucket.tokens = (bucket.tokens + refill).min(self.config.burst as f64);
         bucket.last_refill = now;
-        if bucket.tokens >= 1.0 { bucket.tokens -= 1.0; Ok(()) } else { Err(()) }
+        if bucket.tokens >= 1.0 { bucket.tokens -= 1.0; Ok(()) } else { Err(RateLimitError::Throttled) }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RateLimitError {
+    #[error("rate limit exceeded")]
+    Throttled,
 }
 
 pub async fn rate_limit_middleware(
