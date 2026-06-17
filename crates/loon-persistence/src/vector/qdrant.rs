@@ -72,13 +72,7 @@ fn json_to_qdrant(v: JsonValue) -> Option<Value> {
         JsonValue::Null => None,
         JsonValue::Bool(b) => Some(Value::from(b)),
         JsonValue::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                Some(Value::from(i))
-            } else if let Some(f) = n.as_f64() {
-                Some(Value::from(f))
-            } else {
-                None
-            }
+            n.as_i64().map(Value::from).or_else(|| n.as_f64().map(Value::from))
         }
         JsonValue::String(s) => Some(Value::from(s)),
         // Nested structures are not supported by the simple scalar
@@ -167,9 +161,8 @@ impl VectorDatabase for QdrantVectorDatabase {
 }
 
 #[cfg(test)]
+#[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn trait_compiles() {
         fn _accepts<T: crate::vector::VectorDatabase>(_: &T) {}

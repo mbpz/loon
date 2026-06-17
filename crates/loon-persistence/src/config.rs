@@ -113,10 +113,11 @@ fn default_backend() -> PersistenceBackendConfig {
 /// kind = "qdrant"
 /// url = "http://localhost:6334"
 /// ```
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum VectorBackendConfig {
     /// No vector database configured.
+    #[default]
     None,
     /// Chroma HTTP API.
     Chroma {
@@ -134,12 +135,6 @@ pub enum VectorBackendConfig {
         /// gRPC URL of the Qdrant server (e.g. `http://localhost:6334`).
         url: String,
     },
-}
-
-impl Default for VectorBackendConfig {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 fn default_tenant() -> String {

@@ -134,7 +134,7 @@ struct ChromaQueryResponse {
 }
 
 impl ChromaQueryResponse {
-    fn to_hits(self) -> Vec<VectorHit> {
+    fn to_hits(&self) -> Vec<VectorHit> {
         let mut out = Vec::new();
         if let (Some(ids), Some(distances), Some(metadatas)) = (
             self.ids.first(),
