@@ -42,6 +42,18 @@ pub enum DocumentUpdate {
     Inc { field: String, by: i64 },
 }
 
+/// Object-safe subset of `DocumentDatabase` used for type-erased handles.
+///
+/// `DocumentDatabase::get_or_create_collection` is generic over the document
+/// type, so it cannot appear in a `dyn DocumentDatabase` vtable. Callers
+/// that need an opaque handle (such as the migration helper) use this
+/// trait object as the type-erased stand-in.
+#[async_trait]
+pub trait DocumentDatabaseHandle: Send + Sync {
+    /// Lightweight reachability check.
+    async fn ping(&self) -> PersistenceResult<()>;
+}
+
 #[async_trait]
 pub trait DocumentDatabase: Send + Sync {
     async fn get_or_create_collection<TDocument: Document>(
