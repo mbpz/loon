@@ -76,6 +76,12 @@ pub struct ServerBuilder {
     /// wiring lands when `AlphaEngine` learns to apply plugin
     /// contributions at startup).
     plugin_registry: Arc<loon_core::PluginRegistry>,
+    /// Pre-built `EntityQueries` registered via
+    /// [`ServerBuilder::with_entity_queries`]. Stored on the builder
+    /// for future engine wiring; consumers can also call
+    /// [`ServerBuilder::entity_queries`] to retrieve it.
+    #[allow(dead_code)]
+    entity_queries: Option<Arc<loon_core::entity_cq::EntityQueries>>,
 }
 
 impl ServerBuilder {
@@ -87,6 +93,7 @@ impl ServerBuilder {
             mcp_clients: Vec::new(),
             openapi_services: Vec::new(),
             plugin_registry: Arc::new(loon_core::PluginRegistry::new()),
+            entity_queries: None,
         }
     }
 
@@ -160,6 +167,23 @@ impl ServerBuilder {
     /// so callers can keep their own handle alive.
     pub fn plugin_registry(&self) -> Arc<loon_core::PluginRegistry> {
         self.plugin_registry.clone()
+    }
+
+    /// Provide pre-built [`EntityQueries`](loon_core::entity_cq::EntityQueries)
+    /// for the server. Stored on the builder for future engine
+    /// wiring; the queries are not yet consumed by [`build`].
+    ///
+    /// Useful in tests where the caller wants to assemble the
+    /// queries graph manually with fake stores.
+    pub fn with_entity_queries(mut self, queries: Arc<loon_core::entity_cq::EntityQueries>) -> Self {
+        self.entity_queries = Some(queries);
+        self
+    }
+
+    /// Borrow the registered entity queries, if any. Clones the
+    /// `Arc` so callers can keep their own handle alive.
+    pub fn entity_queries(&self) -> Option<Arc<loon_core::entity_cq::EntityQueries>> {
+        self.entity_queries.clone()
     }
 
     /// Build the [`Server`]. Always succeeds in Phase 1.
@@ -366,5 +390,23 @@ mod tests {
         let reg = Arc::new(loon_core::PluginRegistry::new());
         let builder = Server::builder().with_plugin_registry(reg.clone());
         assert_eq!(builder.plugin_registry().plugins().len(), 0);
+    }
+
+    #[test]
+    fn builder_entity_queries_default_is_none() {
+        let builder = Server::builder();
+        assert!(builder.entity_queries().is_none());
+    }
+
+    /// Compile-time check: `with_entity_queries` accepts an
+    /// `Arc<EntityQueries>` and returns `ServerBuilder`. We can't
+    /// trivially construct an `EntityQueries` here (it has 13
+    /// store dependencies), so this test only verifies the
+    /// signature compiles via a never-run closure.
+    #[allow(dead_code)]
+    fn _signature_check() {
+        fn _accepts_entity_queries(b: ServerBuilder, q: Arc<loon_core::entity_cq::EntityQueries>) -> ServerBuilder {
+            b.with_entity_queries(q)
+        }
     }
 }
