@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use loon_core::{McpClient, SessionId};
+use loon_core::{McpClient, OpenApiToolService, SessionId};
 use loon_emission::EventEmitter;
 use loon_engine::engine_context::Context;
 use loon_engine::{Engine, EngineResult, UtteranceRequest};
@@ -63,6 +63,13 @@ pub struct ServerBuilder {
     /// tools).
     #[allow(dead_code)]
     mcp_clients: Vec<Arc<McpClient>>,
+    /// OpenAPI tool services registered via
+    /// [`ServerBuilder::with_openapi_service`]. Phase 7 stores the
+    /// handles but does not yet wire them into the engine (real
+    /// wiring lands when `AlphaEngine` starts consuming OpenAPI-provided
+    /// tools).
+    #[allow(dead_code)]
+    openapi_services: Vec<Arc<OpenApiToolService>>,
 }
 
 impl ServerBuilder {
@@ -72,6 +79,7 @@ impl ServerBuilder {
             nlp_label: None,
             vector_db: None,
             mcp_clients: Vec::new(),
+            openapi_services: Vec::new(),
         }
     }
 
@@ -115,6 +123,17 @@ impl ServerBuilder {
     /// tools).
     pub fn with_mcp_client(mut self, client: Arc<McpClient>) -> Self {
         self.mcp_clients.push(client);
+        self
+    }
+
+    /// Register an OpenAPI document as a tool source. Each operation
+    /// in the document becomes a `Tool`. In Phase 7 this is
+    /// storage-only — the service is accepted and stored on the
+    /// builder but the engine does not yet consume its tool list
+    /// (real wiring lands when `AlphaEngine` learns about
+    /// OpenAPI-provided tools).
+    pub fn with_openapi_service(mut self, svc: Arc<OpenApiToolService>) -> Self {
+        self.openapi_services.push(svc);
         self
     }
 
@@ -287,6 +306,30 @@ mod tests {
         ));
         let server = Server::builder()
             .with_mcp_client(client)
+            .build()
+            .await
+            .expect("build ok");
+        let _: Arc<dyn Engine> = server.engine.clone();
+    }
+
+    #[tokio::test]
+    async fn builder_accepts_openapi_service() {
+        // Phase 7: the builder records the OpenAPI tool service
+        // handle but does not yet wire it into the engine. This
+        // test exercises the hook with a stub-friendly
+        // OpenApiToolService so the public API surface stays
+        // covered.
+        use loon_core::OpenApiToolService;
+        use serde_json::json;
+
+        let doc = serde_json::from_value(json!({
+            "openapi": "3.0.0",
+            "paths": {}
+        }))
+        .unwrap();
+        let svc: Arc<OpenApiToolService> = Arc::new(OpenApiToolService::new("test", doc));
+        let server = Server::builder()
+            .with_openapi_service(svc)
             .build()
             .await
             .expect("build ok");
