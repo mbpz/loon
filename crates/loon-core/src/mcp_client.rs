@@ -6,15 +6,15 @@
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde_json::Value as JsonValue;
-use std::sync::Arc;
 
 use crate::id_generator::IdGenerator;
-use crate::{CoreError, CoreResult, Tool, ToolId, ToolKind, ToolResult, ToolService};
+use crate::{CoreError, CoreResult, Tool, ToolId, ToolResult, ToolService};
 
 /// How to reach an MCP server.
 ///
 /// Phase 1 only stores the configuration; real transport wiring lands
 /// once the `mcp` crate exposes a stable async API.
+#[allow(dead_code)]
 pub enum McpTransport {
     Stdio { command: String, args: Vec<String> },
     Http { url: String },
@@ -27,6 +27,8 @@ pub enum McpTransport {
 /// or call `tools/list` against a live server yet.
 pub struct McpClient {
     name: String,
+    /// Stored for future transport wiring; unused in Phase 1.
+    #[allow(dead_code)]
     transport: McpTransport,
     /// Lazily initialized tool list (server-provided tool metadata).
     tools_cache: Mutex<Option<Vec<Tool>>>,
@@ -92,6 +94,7 @@ impl ToolService for McpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn tool_id_is_deterministic() {
@@ -144,6 +147,7 @@ mod tests {
         // Sanity-check: ensure the MCP variant of ToolKind exists and
         // is distinct from Local/OpenAPI. Future code will mark tools
         // returned by `McpClient` as `ToolKind::MCP`.
+        use crate::ToolKind;
         assert_ne!(ToolKind::MCP, ToolKind::Local);
         assert_ne!(ToolKind::MCP, ToolKind::OpenAPI);
     }
