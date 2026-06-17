@@ -761,7 +761,7 @@ mod tests {
     }
 
     fn make_engine() -> AlphaEngine {
-        let nlp: Arc<dyn NlpService> = Arc::new(StubNlp);
+        let nlp: Arc<dyn NlpService> = Arc::new(loon_nlp::test_utils::FakeNlpService::new());
         let matcher: Arc<dyn GuidelineMatcher> = Arc::new(EmptyMatcher);
         let tool_caller: Arc<dyn ToolCaller> = Arc::new(EmptyToolCaller);
         let planner: Arc<dyn Planner> = Arc::new(DonePlanner);
