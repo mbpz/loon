@@ -117,6 +117,57 @@ impl EntityQueries {
     ) -> CoreResult<Vec<GuidelineId>> {
         Ok(vec![])
     }
+
+    /// Build an [`EntityQueries`] instance backed entirely by
+    /// in-memory stores (`InMemory*Store`). Used as the default
+    /// wiring when no persistent store is provided — quick-start
+    /// examples, integration tests, and the SDK's default
+    /// [`crate::ServerBuilder::build`] all rely on this.
+    pub fn in_memory() -> Arc<Self> {
+        use crate::stores::{
+            InMemoryAgentStore, InMemoryCannedResponseStore, InMemoryCapabilityStore,
+            InMemoryContextVariableStore, InMemoryCustomerStore, InMemoryGlossaryStore,
+            InMemoryGuidelineStore, InMemoryGuidelineToolAssociationStore, InMemoryJourneyStore,
+            InMemoryRelationshipStore, InMemoryRetrieverStore, InMemorySessionStore,
+        };
+
+        let agent_store: Arc<dyn AgentStore> = Arc::new(InMemoryAgentStore::new());
+        let session_store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::new());
+        let guideline_store: Arc<dyn GuidelineStore> = Arc::new(InMemoryGuidelineStore::new());
+        let customer_store: Arc<dyn CustomerStore> = Arc::new(InMemoryCustomerStore::new());
+        let context_variable_store: Arc<dyn ContextVariableStore> =
+            Arc::new(InMemoryContextVariableStore::new());
+        let relationship_store: Arc<dyn RelationshipStore> =
+            Arc::new(InMemoryRelationshipStore::new());
+        let guideline_tool_association_store: Arc<dyn GuidelineToolAssociationStore> =
+            Arc::new(InMemoryGuidelineToolAssociationStore::new());
+        let glossary_store: Arc<dyn GlossaryStore> = Arc::new(InMemoryGlossaryStore::new());
+        let journey_store: Arc<dyn JourneyStore> = Arc::new(InMemoryJourneyStore::new());
+        let canned_response_store: Arc<dyn CannedResponseStore> =
+            Arc::new(InMemoryCannedResponseStore::new());
+        let capability_store: Arc<dyn CapabilityStore> =
+            Arc::new(InMemoryCapabilityStore::new());
+        let retriever_store: Arc<dyn RetrieverStore> = Arc::new(InMemoryRetrieverStore::new());
+        let projection = Arc::new(JourneyGuidelineProjection {
+            journey_store: journey_store.clone(),
+            guideline_store: guideline_store.clone(),
+        });
+        Arc::new(Self {
+            agent_store,
+            session_store,
+            guideline_store,
+            customer_store,
+            context_variable_store,
+            relationship_store,
+            guideline_tool_association_store,
+            glossary_store,
+            journey_store,
+            canned_response_store,
+            capability_store,
+            retriever_store,
+            journey_guideline_projection: projection,
+        })
+    }
 }
 
 /// Write-side: command methods backed by individual stores.
@@ -172,5 +223,15 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(p.labels.unwrap(), labels);
+    }
+
+    #[tokio::test]
+    async fn in_memory_queries_round_trip_agent() {
+        let q = EntityQueries::in_memory();
+        let agent = Agent::new("test", "x");
+        let id = agent.id.clone();
+        q.agent_store.create(agent).await.unwrap();
+        let loaded = q.read_agent(&id).await.unwrap();
+        assert_eq!(loaded.name, "test");
     }
 }
