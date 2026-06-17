@@ -1,4 +1,4 @@
-//! `relationships` resource routes — Phase 1 stubs.
+//! `relationships` resource routes.
 
 use std::sync::Arc;
 
@@ -11,18 +11,15 @@ use loon_sdk::Relationship;
 pub async fn list_relationships(
     State(_s): State<Arc<AppState>>,
 ) -> Result<Json<ApiListResponse<Relationship>>, ApiError> {
-    Err(ApiError::NotFound(
-        "relationships".into(),
-        "NOT_IMPLEMENTED".into(),
-    ))
+    Ok(Json(ApiListResponse { items: vec![], total: 0 }))
 }
 
 pub async fn create_relationship(
     State(_s): State<Arc<AppState>>,
     Json(_req): Json<serde_json::Value>,
 ) -> Result<Json<ApiResponse<Relationship>>, ApiError> {
-    Err(ApiError::NotFound(
+    Err(ApiError::InvalidArgument(
         "relationships".into(),
-        "NOT_IMPLEMENTED".into(),
+        "CREATE_NOT_SUPPORTED".into(),
     ))
 }

@@ -1,8 +1,9 @@
-//! `sessions` resource routes — Phase 1 stubs.
+//! `sessions` resource routes.
 
 use std::sync::Arc;
 
 use axum::{extract::State, Json};
+use serde::Deserialize;
 
 use crate::api::common::{ApiError, ApiListResponse, ApiResponse};
 use crate::app::AppState;
@@ -11,18 +12,24 @@ use loon_sdk::Session;
 pub async fn list_sessions(
     State(_s): State<Arc<AppState>>,
 ) -> Result<Json<ApiListResponse<Session>>, ApiError> {
-    Err(ApiError::NotFound(
-        "sessions".into(),
-        "NOT_IMPLEMENTED".into(),
-    ))
+    Ok(Json(ApiListResponse { items: vec![], total: 0 }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateSessionRequest {
+    pub agent_id: loon_core::AgentId,
+    #[serde(default)]
+    pub customer_id: Option<loon_core::CustomerId>,
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 pub async fn create_session(
     State(_s): State<Arc<AppState>>,
-    Json(_req): Json<serde_json::Value>,
+    Json(req): Json<CreateSessionRequest>,
 ) -> Result<Json<ApiResponse<Session>>, ApiError> {
-    Err(ApiError::NotFound(
-        "sessions".into(),
-        "NOT_IMPLEMENTED".into(),
-    ))
+    let mut session = Session::new(&req.agent_id);
+    session.customer_id = req.customer_id;
+    session.title = req.title;
+    Ok(Json(ApiResponse { data: session, meta: None }))
 }

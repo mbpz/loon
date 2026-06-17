@@ -34,6 +34,7 @@ clap = { workspace = true }
 dialoguer = { workspace = true }
 console = { workspace = true }
 futures = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

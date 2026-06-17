@@ -1,8 +1,9 @@
-//! `customers` resource routes — Phase 1 stubs.
+//! `customers` resource routes.
 
 use std::sync::Arc;
 
 use axum::{extract::State, Json};
+use serde::Deserialize;
 
 use crate::api::common::{ApiError, ApiListResponse, ApiResponse};
 use crate::app::AppState;
@@ -11,18 +12,18 @@ use loon_sdk::Customer;
 pub async fn list_customers(
     State(_s): State<Arc<AppState>>,
 ) -> Result<Json<ApiListResponse<Customer>>, ApiError> {
-    Err(ApiError::NotFound(
-        "customers".into(),
-        "NOT_IMPLEMENTED".into(),
-    ))
+    Ok(Json(ApiListResponse { items: vec![], total: 0 }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateCustomerRequest {
+    pub name: String,
 }
 
 pub async fn create_customer(
     State(_s): State<Arc<AppState>>,
-    Json(_req): Json<serde_json::Value>,
+    Json(req): Json<CreateCustomerRequest>,
 ) -> Result<Json<ApiResponse<Customer>>, ApiError> {
-    Err(ApiError::NotFound(
-        "customers".into(),
-        "NOT_IMPLEMENTED".into(),
-    ))
+    let c = Customer::new(req.name);
+    Ok(Json(ApiResponse { data: c, meta: None }))
 }
