@@ -1,10 +1,19 @@
 //! Rate limiting middleware. Phase 1: simple in-memory token bucket
 //! per source IP. For production, swap with a Redis-backed impl.
 
+use axum::{
+    body::Body,
+    extract::{ConnectInfo, State},
+    http::{Request, Response, StatusCode},
+    middleware::Next,
+};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use parking_lot::Mutex;
 use std::time::Instant;
+
+use crate::app::AppState;
 
 #[derive(Debug, Clone)]
 pub struct RateLimitConfig {
@@ -40,6 +49,18 @@ impl RateLimiter {
         bucket.last_refill = now;
         if bucket.tokens >= 1.0 { bucket.tokens -= 1.0; Ok(()) } else { Err(()) }
     }
+}
+
+pub async fn rate_limit_middleware(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    request: Request<Body>,
+    next: Next,
+) -> Result<Response<Body>, StatusCode> {
+    if state.rate_limiter.check(&addr).is_err() {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
+    }
+    Ok(next.run(request).await)
 }
 
 #[cfg(test)]

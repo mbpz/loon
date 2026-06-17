@@ -2,13 +2,18 @@
 
 use std::sync::Arc;
 
-use axum::{routing::get, Router};
+use axum::{routing::get, Router, middleware};
 use loon_sdk::Server;
+
+use crate::auth::AuthProvider;
+use crate::middleware::rate_limit::{RateLimiter, RateLimitConfig, rate_limit_middleware};
 
 /// State injected into every Axum handler via
 /// `axum::extract::State`.
 pub struct AppState {
     pub server: Arc<Server>,
+    pub auth: Arc<dyn AuthProvider>,
+    pub rate_limiter: Arc<RateLimiter>,
 }
 
 /// Build the root [`Router`] with the liveness routes + a
@@ -67,12 +72,15 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         // ---- end Phase 1 stubs ----
         .route("/v1/sessions/{id}/chat", get(crate::routes::chat::chat_ws))
+        .route_layer(middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
         .with_state(state)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::NoopAuthProvider;
+    use crate::middleware::rate_limit::RateLimitConfig;
 
     #[tokio::test]
     async fn router_builds_with_empty_server() {
@@ -81,7 +89,19 @@ mod tests {
         let server = Server::builder().build().await.expect("build server");
         let state = Arc::new(AppState {
             server: Arc::new(server),
+            auth: Arc::new(NoopAuthProvider),
+            rate_limiter: Arc::new(RateLimiter::new(RateLimitConfig::default())),
         });
         let _router: Router = router(state);
+    }
+
+    #[test]
+    fn app_state_constructs() {
+        // Sanity: ensure AppState fields are typed correctly without
+        // needing a real Server. We don't construct AppState itself
+        // here because Server is async-build; the previous test covers
+        // full construction.
+        let _: Arc<dyn AuthProvider> = Arc::new(NoopAuthProvider);
+        let _: Arc<RateLimiter> = Arc::new(RateLimiter::new(RateLimitConfig::default()));
     }
 }

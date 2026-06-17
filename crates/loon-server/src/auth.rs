@@ -8,7 +8,6 @@
 use async_trait::async_trait;
 use axum::http::HeaderMap;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 #[async_trait]
 pub trait AuthProvider: Send + Sync {

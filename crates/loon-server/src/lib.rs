@@ -69,6 +69,10 @@ pub async fn run() -> anyhow::Result<()> {
     };
     let app_state = std::sync::Arc::new(crate::app::AppState {
         server: std::sync::Arc::new(server),
+        auth: std::sync::Arc::new(crate::auth::NoopAuthProvider),
+        rate_limiter: std::sync::Arc::new(crate::middleware::rate_limit::RateLimiter::new(
+            crate::middleware::rate_limit::RateLimitConfig::default(),
+        )),
     });
     let app = crate::app::router(app_state);
     let addr: std::net::SocketAddr = config.server.bind.parse()?;
