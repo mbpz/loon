@@ -252,7 +252,10 @@ impl ServerBuilder {
             nlp,
         });
 
-        Ok(Server { engine })
+        Ok(Server {
+            engine,
+            queries,
+        })
     }
 }
 
@@ -263,14 +266,26 @@ impl Default for ServerBuilder {
 }
 
 /// Top-level SDK handle. Owns the [`Engine`] used to process
-/// interactions.
+/// interactions and the underlying [`EntityQueries`](loon_core::entity_cq::EntityQueries)
+/// graph. The queries are exposed publicly so embedders (e.g.
+/// `loon-server` route handlers) can read and write entities
+/// directly through the same store-backed graph the engine uses.
 pub struct Server {
     pub engine: Arc<dyn Engine>,
+    pub queries: Arc<loon_core::entity_cq::EntityQueries>,
 }
 
 impl Server {
     pub fn builder() -> ServerBuilder {
         ServerBuilder::new()
+    }
+
+    /// Borrow the entity-queries graph that backs the engine. The
+    /// returned `Arc` is cheap to clone and lets callers reach
+    /// individual stores (e.g. `queries.agent_store`) for
+    /// CRUD-style work outside the engine pipeline.
+    pub fn queries(&self) -> Arc<loon_core::entity_cq::EntityQueries> {
+        self.queries.clone()
     }
 
     /// Run a closure against the server. The closure receives a
@@ -526,5 +541,27 @@ mod tests {
         // in-memory queries this would fail with NotFound.
         let result = server.engine.process(&ctx, &buffer).await.unwrap();
         assert!(result);
+    }
+
+    #[tokio::test]
+    async fn server_exposes_queries() {
+        // The server's queries graph is publicly accessible and
+        // backed by the same in-memory stores the engine uses; an
+        // empty server has zero agents, but writing through
+        // `queries.agent_store.create` shows up on a follow-up
+        // `list` call — proving the route layer can use this same
+        // graph for direct CRUD instead of a side-channel HashMap.
+        let server = Server::builder().build().await.unwrap();
+        let queries = server.queries();
+        let agents = queries.agent_store.list(&[]).await.unwrap();
+        assert!(agents.is_empty());
+
+        let agent = loon_core::Agent::new("a", "b");
+        let id = agent.id.clone();
+        queries.agent_store.create(agent).await.unwrap();
+
+        let agents = server.queries.agent_store.list(&[]).await.unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].id, id);
     }
 }

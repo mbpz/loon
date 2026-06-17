@@ -5,8 +5,8 @@ use std::sync::Arc;
 use crate::journey_guideline_projection::JourneyGuidelineProjection;
 use crate::stores::{
     AgentStore, CannedResponseStore, CapabilityStore, ContextVariableStore, CustomerStore,
-    GlossaryStore, GuidelineStore, GuidelineToolAssociationStore, JourneyStore, RelationshipStore,
-    RetrieverStore, SessionStore,
+    EvaluationStore, GlossaryStore, GuidelineStore, GuidelineToolAssociationStore, JourneyStore,
+    RelationshipStore, RetrieverStore, SessionStore, TagStore, ToolStore,
 };
 use crate::{
     Agent, AgentId, CannedResponse, Capability, ContextVariable, ContextVariableId,
@@ -28,6 +28,9 @@ pub struct EntityQueries {
     pub canned_response_store: Arc<dyn CannedResponseStore>,
     pub capability_store: Arc<dyn CapabilityStore>,
     pub retriever_store: Arc<dyn RetrieverStore>,
+    pub tool_store: Arc<dyn ToolStore>,
+    pub evaluation_store: Arc<dyn EvaluationStore>,
+    pub tag_store: Arc<dyn TagStore>,
     pub journey_guideline_projection: Arc<JourneyGuidelineProjection>,
 }
 
@@ -126,9 +129,10 @@ impl EntityQueries {
     pub fn in_memory() -> Arc<Self> {
         use crate::stores::{
             InMemoryAgentStore, InMemoryCannedResponseStore, InMemoryCapabilityStore,
-            InMemoryContextVariableStore, InMemoryCustomerStore, InMemoryGlossaryStore,
-            InMemoryGuidelineStore, InMemoryGuidelineToolAssociationStore, InMemoryJourneyStore,
-            InMemoryRelationshipStore, InMemoryRetrieverStore, InMemorySessionStore,
+            InMemoryContextVariableStore, InMemoryCustomerStore, InMemoryEvaluationStore,
+            InMemoryGlossaryStore, InMemoryGuidelineStore, InMemoryGuidelineToolAssociationStore,
+            InMemoryJourneyStore, InMemoryRelationshipStore, InMemoryRetrieverStore,
+            InMemorySessionStore, InMemoryTagStore, InMemoryToolStore,
         };
 
         let agent_store: Arc<dyn AgentStore> = Arc::new(InMemoryAgentStore::new());
@@ -148,6 +152,9 @@ impl EntityQueries {
         let capability_store: Arc<dyn CapabilityStore> =
             Arc::new(InMemoryCapabilityStore::new());
         let retriever_store: Arc<dyn RetrieverStore> = Arc::new(InMemoryRetrieverStore::new());
+        let tool_store: Arc<dyn ToolStore> = Arc::new(InMemoryToolStore::new());
+        let evaluation_store: Arc<dyn EvaluationStore> = Arc::new(InMemoryEvaluationStore::new());
+        let tag_store: Arc<dyn TagStore> = Arc::new(InMemoryTagStore::new());
         let projection = Arc::new(JourneyGuidelineProjection {
             journey_store: journey_store.clone(),
             guideline_store: guideline_store.clone(),
@@ -165,6 +172,9 @@ impl EntityQueries {
             canned_response_store,
             capability_store,
             retriever_store,
+            tool_store,
+            evaluation_store,
+            tag_store,
             journey_guideline_projection: projection,
         })
     }
