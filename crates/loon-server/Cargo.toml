@@ -29,6 +29,7 @@ dotenvy = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = "0.3"
+parking_lot = { workspace = true }
 clap = { workspace = true }
 dialoguer = { workspace = true }
 console = { workspace = true }

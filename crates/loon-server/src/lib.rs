@@ -9,6 +9,7 @@
 pub mod api;
 pub mod app;
 pub mod config;
+pub mod middleware;
 pub mod routes;
 
 pub use api::common::*;
