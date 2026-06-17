@@ -55,7 +55,7 @@ mod tests {
         ));
         let adapter = McpToolServiceAdapter { client };
         let res = adapter.call_tool(&ToolId::new(), serde_json::json!({})).await;
-        let err = res.err().expect("phase 1 call_tool should error");
+        let err = res.expect_err("phase 1 call_tool should error");
         let msg = err.to_string();
         assert!(msg.contains("MCP call_tool not yet implemented"), "got: {msg}");
     }
