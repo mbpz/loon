@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value as JsonValue};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::id_generator::IdGenerator;
 use crate::{
@@ -342,5 +343,43 @@ mod tests {
             serde_json::from_value(json!({ "openapi": "3.0.0", "paths": {} })).unwrap();
         let svc = OpenApiToolService::new("test", doc).with_base_url("https://api.example.com");
         assert_eq!(svc.base_url(), Some("https://api.example.com"));
+    }
+}
+
+/// Bridges an `OpenApiToolService` into a `ToolService` facade for
+/// the `ServiceRegistry`. Phase 7 is a thin pass-through; later
+/// phases may add auth header injection.
+pub struct OpenApiToolServiceAdapter {
+    pub service: Arc<OpenApiToolService>,
+}
+
+#[async_trait]
+impl ToolService for OpenApiToolServiceAdapter {
+    async fn list_tools(&self) -> CoreResult<Vec<Tool>> {
+        self.service.list_tools().await
+    }
+
+    async fn call_tool(
+        &self,
+        tool_id: &ToolId,
+        arguments: CrateJsonValue,
+    ) -> CoreResult<ToolResult> {
+        self.service.call_tool(tool_id, arguments).await
+    }
+}
+
+#[cfg(test)]
+mod adapter_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn adapter_delegates_to_service() {
+        let doc: OpenApiDocument =
+            serde_json::from_value(json!({ "openapi": "3.0.0", "paths": {} })).unwrap();
+        let svc = Arc::new(OpenApiToolService::new("test", doc));
+        let adapter = OpenApiToolServiceAdapter { service: svc };
+        let tools = adapter.list_tools().await.unwrap();
+        assert!(tools.is_empty());
     }
 }
