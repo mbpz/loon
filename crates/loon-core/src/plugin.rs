@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{
-    AgentId, CoreResult, Guideline, GuidelineId, Journey, JourneyId, Tool, ToolId, ToolService,
+    AgentId, CoreResult, Guideline, Journey, Tool, ToolService,
 };
 
 /// What a plugin can contribute. Each variant is one of the entity
@@ -118,12 +118,41 @@ pub struct GroupedContributions {
     pub tool_services: HashMap<String, Arc<dyn ToolService>>,
 }
 
+/// Convenience `Plugin` impl that wraps a closure producing contributions.
+/// Useful for inline plugins (e.g. test fixtures or quick scripts).
+pub struct FunctionPlugin {
+    name: String,
+    func: Box<dyn Fn() -> Vec<PluginContribution> + Send + Sync>,
+}
+
+impl FunctionPlugin {
+    pub fn new<F>(name: impl Into<String>, func: F) -> Self
+    where
+        F: Fn() -> Vec<PluginContribution> + Send + Sync + 'static,
+    {
+        Self {
+            name: name.into(),
+            func: Box::new(func),
+        }
+    }
+}
+
+#[async_trait]
+impl Plugin for FunctionPlugin {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    async fn contributions(&self) -> CoreResult<Vec<PluginContribution>> {
+        Ok((self.func)())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        AgentId, Criticality, Guideline, GuidelineContent, Journey, JourneyNode, JourneyNodeId,
-        NodeKind, Tool, ToolId, ToolKind,
+        AgentId, Criticality, Guideline, GuidelineContent, GuidelineId, Journey, JourneyId,
+        JourneyNode, JourneyNodeId, NodeKind, Tool, ToolId, ToolKind,
     };
 
     struct StaticPlugin {
@@ -246,5 +275,17 @@ mod tests {
     fn registry_default_is_empty() {
         let reg = PluginRegistry::default();
         assert_eq!(reg.plugins().len(), 0);
+    }
+
+    #[test]
+    fn function_plugin_invokes_closure() {
+        let p = FunctionPlugin::new("inline", Vec::new);
+        assert_eq!(p.name(), "inline");
+    }
+
+    #[tokio::test]
+    async fn function_plugin_contributions_empty() {
+        let p = FunctionPlugin::new("inline", Vec::new);
+        assert!(p.contributions().await.unwrap().is_empty());
     }
 }
