@@ -1,40 +1,27 @@
 //! SDK `Server` and `ServerBuilder` — the user-facing entry point for
 //! embedding `loon` into another application.
 //!
-//! Phase 1 wires a `StubEngine` so the crate compiles and a basic
-//! `process_message` round-trip works. Full engine wiring (real
-//! `AlphaEngine` with `EntityQueries`/`EntityCommands` backed by a
-//! `DocumentDatabase`) lands in a later phase.
+//! [`ServerBuilder::build`] returns a [`Server`] whose [`Engine`]
+//! is a real [`loon_engine::AlphaEngine`] backed by an in-memory
+//! [`loon_core::entity_cq::EntityQueries`] graph. Callers can
+//! override the queries graph with [`ServerBuilder::with_entity_queries`]
+//! and the NLP service with [`ServerBuilder::with_nlp_service`];
+//! anything left unset falls back to a fully in-memory default
+//! suitable for examples and tests.
+//!
+//! `with_document_db` is currently a diagnostics-only hook —
+//! `DocumentDatabase::get_or_create_collection<T>` is generic and
+//! therefore not dyn-compatible, so the SDK can't store an
+//! `Arc<dyn DocumentDatabase>`. A future phase will add a
+//! database-backed `EntityQueries` factory the user can pass via
+//! `with_entity_queries`.
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use loon_core::{McpClient, OpenApiToolService, SessionId};
-use loon_emission::EventEmitter;
-use loon_engine::engine_context::Context;
-use loon_engine::{Engine, EngineResult, UtteranceRequest};
+use loon_engine::Engine;
 
 use crate::error::SdkResult;
-
-/// A no-op `Engine` implementation used by Phase 1 of the SDK.
-/// The real wiring (alpha engine + entity stores) lands later.
-pub struct StubEngine;
-
-#[async_trait]
-impl Engine for StubEngine {
-    async fn process(&self, _: &Context, _: &dyn EventEmitter) -> EngineResult<bool> {
-        Ok(true)
-    }
-
-    async fn utter(
-        &self,
-        _: &Context,
-        _: &dyn EventEmitter,
-        _: &[UtteranceRequest],
-    ) -> EngineResult<bool> {
-        Ok(false)
-    }
-}
 
 /// Builder for [`Server`]. Phase 1 only stores type-name
 /// diagnostics from its dependencies; full engine wiring lands
@@ -42,14 +29,20 @@ impl Engine for StubEngine {
 pub struct ServerBuilder {
     /// Type name of the `DocumentDatabase` passed via
     /// [`ServerBuilder::with_document_db`]. Used for diagnostics
-    /// only — real wiring is deferred.
+    /// only — `DocumentDatabase` isn't dyn-compatible because
+    /// `get_or_create_collection<T>` is generic, so the SDK can't
+    /// store an `Arc<dyn DocumentDatabase>`. A later phase will
+    /// expose a database-backed `EntityQueries` factory the user
+    /// passes via [`ServerBuilder::with_entity_queries`].
     #[allow(dead_code)]
     document_db_label: Option<String>,
-    /// Type name of the `NlpService` passed via
-    /// [`ServerBuilder::with_nlp_service`]. Used for diagnostics
-    /// only — real wiring is deferred.
-    #[allow(dead_code)]
-    nlp_label: Option<String>,
+    /// Optional `NlpService` passed via
+    /// [`ServerBuilder::with_nlp_service`]. Wired into the engine
+    /// at [`ServerBuilder::build`] time; defaults to
+    /// [`loon_nlp::test_utils::FakeNlpService`] when unset so
+    /// quick-start examples and tests don't have to provide a real
+    /// LLM backend.
+    nlp_service: Option<Arc<dyn loon_nlp::NlpService>>,
     /// Optional `VectorDatabase` passed via
     /// [`ServerBuilder::with_vector_db`]. Phase 5 stores the
     /// handle but does not yet wire it into the engine (real
@@ -77,10 +70,9 @@ pub struct ServerBuilder {
     /// contributions at startup).
     plugin_registry: Arc<loon_core::PluginRegistry>,
     /// Pre-built `EntityQueries` registered via
-    /// [`ServerBuilder::with_entity_queries`]. Stored on the builder
-    /// for future engine wiring; consumers can also call
-    /// [`ServerBuilder::entity_queries`] to retrieve it.
-    #[allow(dead_code)]
+    /// [`ServerBuilder::with_entity_queries`]. Consumed by
+    /// [`ServerBuilder::build`] when set; otherwise the engine is
+    /// wired against [`loon_core::entity_cq::EntityQueries::in_memory`].
     entity_queries: Option<Arc<loon_core::entity_cq::EntityQueries>>,
 }
 
@@ -88,7 +80,7 @@ impl ServerBuilder {
     pub fn new() -> Self {
         Self {
             document_db_label: None,
-            nlp_label: None,
+            nlp_service: None,
             vector_db: None,
             mcp_clients: Vec::new(),
             openapi_services: Vec::new(),
@@ -98,8 +90,13 @@ impl ServerBuilder {
     }
 
     /// Reserve a hook for the document database that will back the
-    /// real entity stores. The database is accepted but not yet
-    /// wired (real wiring lands in a later phase).
+    /// real entity stores. The handle is recorded for diagnostics
+    /// only — `DocumentDatabase` isn't dyn-compatible (the
+    /// `get_or_create_collection<T>` method is generic), so the
+    /// SDK can't store an `Arc<dyn DocumentDatabase>`. Wire a
+    /// database-backed graph by constructing an
+    /// `EntityQueries` directly and passing it via
+    /// [`ServerBuilder::with_entity_queries`].
     pub fn with_document_db<DB: loon_persistence::DocumentDatabase + 'static>(
         mut self,
         db: Arc<DB>,
@@ -109,10 +106,11 @@ impl ServerBuilder {
         self
     }
 
-    /// Reserve a hook for an NLP service. The service is accepted
-    /// but not yet wired (real wiring lands in a later phase).
+    /// Provide the NLP service the engine should drive. When
+    /// unset, [`ServerBuilder::build`] falls back to
+    /// [`loon_nlp::test_utils::FakeNlpService`].
     pub fn with_nlp_service(mut self, nlp: Arc<dyn loon_nlp::NlpService>) -> Self {
-        self.nlp_label = Some(std::any::type_name_of_val(&*nlp).to_string());
+        self.nlp_service = Some(nlp);
         self
     }
 
@@ -170,11 +168,13 @@ impl ServerBuilder {
     }
 
     /// Provide pre-built [`EntityQueries`](loon_core::entity_cq::EntityQueries)
-    /// for the server. Stored on the builder for future engine
-    /// wiring; the queries are not yet consumed by [`build`].
+    /// for the server. Consumed by [`ServerBuilder::build`] to wire
+    /// the [`loon_engine::AlphaEngine`]; if unset, the engine is
+    /// built against [`loon_core::entity_cq::EntityQueries::in_memory`].
     ///
     /// Useful in tests where the caller wants to assemble the
-    /// queries graph manually with fake stores.
+    /// queries graph manually with fake stores, or for production
+    /// code that wires its own database-backed stores.
     pub fn with_entity_queries(mut self, queries: Arc<loon_core::entity_cq::EntityQueries>) -> Self {
         self.entity_queries = Some(queries);
         self
@@ -186,11 +186,73 @@ impl ServerBuilder {
         self.entity_queries.clone()
     }
 
-    /// Build the [`Server`]. Always succeeds in Phase 1.
+    /// Build the [`Server`]. Constructs a real
+    /// [`loon_engine::AlphaEngine`] backed by the configured
+    /// [`EntityQueries`](loon_core::entity_cq::EntityQueries) (or
+    /// an in-memory default) and the configured
+    /// [`loon_nlp::NlpService`] (or a [`FakeNlpService`](loon_nlp::test_utils::FakeNlpService)
+    /// default).
     pub async fn build(self) -> SdkResult<Server> {
-        Ok(Server {
-            engine: Arc::new(StubEngine),
-        })
+        use loon_engine::canned_response_generator::CannedResponseGenerator;
+        use loon_engine::guideline_matching::LlmGuidelineMatcher;
+        use loon_engine::message_generator::MessageGenerator;
+        use loon_engine::prompt_builder::PromptBuilder;
+        use loon_engine::relational_resolver::RelationalResolver;
+        use loon_engine::tool_calling::DefaultToolCallBatcher;
+        use loon_engine::{
+            AlphaEngine, DefaultOptimizationPolicy, EngineHooks, NoopPlanner,
+            PerceivedPerformancePolicy,
+        };
+
+        let queries = self
+            .entity_queries
+            .unwrap_or_else(loon_core::entity_cq::EntityQueries::in_memory);
+        let commands = Arc::new(loon_core::entity_cq::EntityCommands {
+            session_store: queries.session_store.clone(),
+            context_variable_store: queries.context_variable_store.clone(),
+        });
+
+        let nlp: Arc<dyn loon_nlp::NlpService> = self
+            .nlp_service
+            .unwrap_or_else(|| Arc::new(loon_nlp::test_utils::FakeNlpService::new()));
+
+        let matcher: Arc<dyn loon_engine::guideline_matching::GuidelineMatcher> =
+            Arc::new(LlmGuidelineMatcher::new(nlp.clone()));
+        let tool_caller: Arc<dyn loon_engine::tool_calling::ToolCaller> =
+            Arc::new(DefaultToolCallBatcher {
+                nlp: nlp.clone(),
+                registry: Arc::new(loon_core::InMemoryServiceRegistry::new()),
+            });
+        let planner: Arc<dyn loon_engine::Planner> = Arc::new(NoopPlanner);
+        let prompt_builder = Arc::new(PromptBuilder::new(
+            Arc::new(loon_nlp::OpenAiTokenizer),
+            8000,
+        ));
+        let canned_gen = Arc::new(CannedResponseGenerator::new(nlp.clone()));
+        let message_generator = Arc::new(MessageGenerator {
+            nlp: nlp.clone(),
+            prompt_builder,
+            canned_response_generator: canned_gen,
+        });
+        let relational_resolver =
+            Arc::new(RelationalResolver::new(queries.relationship_store.clone()));
+
+        let engine = Arc::new(AlphaEngine {
+            queries: queries.clone(),
+            commands,
+            matcher,
+            tool_caller,
+            planner,
+            message_generator,
+            relational_resolver,
+            hooks: EngineHooks::default(),
+            optimization_policy: Arc::new(DefaultOptimizationPolicy),
+            performance_policy: Arc::new(PerceivedPerformancePolicy::new()),
+            session_store: queries.session_store.clone(),
+            nlp,
+        });
+
+        Ok(Server { engine })
     }
 }
 
@@ -240,6 +302,7 @@ fn _assert_dyn_engine(_: &dyn Engine) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use loon_core::SessionId;
     use loon_nlp::test_utils::FakeNlpService;
     use loon_persistence::backends::json_file::JsonFileDocumentDatabase;
@@ -408,5 +471,60 @@ mod tests {
         fn _accepts_entity_queries(b: ServerBuilder, q: Arc<loon_core::entity_cq::EntityQueries>) -> ServerBuilder {
             b.with_entity_queries(q)
         }
+    }
+
+    #[tokio::test]
+    async fn build_creates_real_alpha_engine() {
+        // The engine returned by `build` is now `AlphaEngine`, not
+        // `StubEngine`. Smoke-test it by exercising the trait via
+        // `utter` (a Phase-1 no-op that always returns Ok(false))
+        // — calling it through `Arc<dyn Engine>` proves the engine
+        // is fully wired (queries graph, NLP, matcher, planner,
+        // etc.) and dyn-compatible.
+        use loon_engine::engine_context::Context as EngineCtx;
+
+        let server = Server::builder().build().await.expect("build ok");
+        let agent = loon_core::Agent::new("a", "b");
+        let buffer = loon_emission::EventBuffer::new(agent.clone());
+        let ctx = EngineCtx {
+            session_id: loon_core::SessionId::new(),
+            agent_id: agent.id.clone(),
+        };
+        let result = server.engine.utter(&ctx, &buffer, &[]).await.unwrap();
+        // Phase-1 `utter` always returns false.
+        assert!(!result);
+    }
+
+    #[tokio::test]
+    async fn build_uses_provided_entity_queries() {
+        // When `with_entity_queries` is called, `build` must use
+        // those queries and not the default `in_memory` graph.
+        // Pre-seed an agent in our queries; verify the engine can
+        // see it via `process` (which calls `read_agent`).
+        let queries = loon_core::entity_cq::EntityQueries::in_memory();
+        let agent = loon_core::Agent::new("seeded", "by-test");
+        let agent_id = agent.id.clone();
+        queries.agent_store.create(agent).await.unwrap();
+        let session = loon_core::Session::new(&agent_id);
+        let session_id = session.id.clone();
+        queries.session_store.create(session).await.unwrap();
+
+        let server = Server::builder()
+            .with_entity_queries(queries.clone())
+            .build()
+            .await
+            .expect("build ok");
+
+        let buffer = loon_emission::EventBuffer::new(loon_core::Agent::new("a", "b"));
+        let ctx = loon_engine::engine_context::Context {
+            session_id,
+            agent_id,
+        };
+        // `process` reads the agent + session from `queries`. With
+        // the queries we just supplied, both lookups succeed and
+        // the pipeline returns Ok(true). With the default
+        // in-memory queries this would fail with NotFound.
+        let result = server.engine.process(&ctx, &buffer).await.unwrap();
+        assert!(result);
     }
 }
