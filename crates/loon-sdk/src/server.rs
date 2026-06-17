@@ -50,6 +50,12 @@ pub struct ServerBuilder {
     /// only — real wiring is deferred.
     #[allow(dead_code)]
     nlp_label: Option<String>,
+    /// Optional `VectorDatabase` passed via
+    /// [`ServerBuilder::with_vector_db`]. Phase 5 stores the
+    /// handle but does not yet wire it into the engine (real
+    /// wiring lands when `AlphaEngine` starts indexing vectors).
+    #[allow(dead_code)]
+    vector_db: Option<Arc<dyn loon_persistence::VectorDatabase>>,
 }
 
 impl ServerBuilder {
@@ -57,6 +63,7 @@ impl ServerBuilder {
         Self {
             document_db_label: None,
             nlp_label: None,
+            vector_db: None,
         }
     }
 
@@ -76,6 +83,18 @@ impl ServerBuilder {
     /// but not yet wired (real wiring lands in a later phase).
     pub fn with_nlp_service(mut self, nlp: Arc<dyn loon_nlp::NlpService>) -> Self {
         self.nlp_label = Some(std::any::type_name_of_val(&*nlp).to_string());
+        self
+    }
+
+    /// Reserve a hook for a `VectorDatabase` (Chroma, Qdrant, …).
+    /// The database is accepted and stored on the builder but not
+    /// yet wired into the engine — full engine wiring lands once
+    /// `AlphaEngine` starts indexing vectors.
+    pub fn with_vector_db<VD: loon_persistence::VectorDatabase + 'static>(
+        mut self,
+        db: Arc<VD>,
+    ) -> Self {
+        self.vector_db = Some(db);
         self
     }
 
@@ -185,6 +204,47 @@ mod tests {
         let server = Server::builder()
             .with_document_db(db)
             .with_nlp_service(nlp)
+            .build()
+            .await
+            .expect("build ok");
+        let _: Arc<dyn Engine> = server.engine.clone();
+    }
+
+    /// In-memory `VectorDatabase` used only to exercise
+    /// `with_vector_db`; we don't talk to a real Chroma or Qdrant
+    /// in tests.
+    struct InMemoryVectorDb;
+
+    #[async_trait]
+    impl loon_persistence::VectorDatabase for InMemoryVectorDb {
+        async fn upsert(
+            &self,
+            _collection: &str,
+            _id: &str,
+            _vector: Vec<f32>,
+            _metadata: serde_json::Value,
+        ) -> loon_persistence::PersistenceResult<()> {
+            Ok(())
+        }
+        async fn search(
+            &self,
+            _collection: &str,
+            _query: Vec<f32>,
+            _top_k: usize,
+        ) -> loon_persistence::PersistenceResult<Vec<loon_persistence::VectorHit>> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn builder_accepts_vector_db() {
+        // Phase 5: the builder records the vector db handle but
+        // does not yet wire it into the engine. This test
+        // exercises the hook with a stub implementation so the
+        // public API surface stays covered.
+        let vdb: Arc<InMemoryVectorDb> = Arc::new(InMemoryVectorDb);
+        let server = Server::builder()
+            .with_vector_db(vdb)
             .build()
             .await
             .expect("build ok");
