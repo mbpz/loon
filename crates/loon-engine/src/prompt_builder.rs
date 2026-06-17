@@ -12,6 +12,7 @@ use loon_nlp::Tokenizer;
 
 use crate::engine_context::{GuidelineMatch, Interaction};
 use crate::error::EngineResult;
+use crate::tool_calling::caller::ToolExecutionResult;
 
 /// Builds prompts for the LLM under a fixed token budget.
 pub struct PromptBuilder {
@@ -29,32 +30,136 @@ impl PromptBuilder {
 }
 
 impl PromptBuilder {
-    /// Build the final generation prompt from a fully-prepared
-    /// `EngineContext`. Phase 1 produces a flat string with the
-    /// matched guidelines; real implementation will budget
-    /// sections, truncate tool results, and inject glossary/
-    /// variable context.
+    /// Build the final agent-response prompt. Sections (in order):
+    ///   1. Agent identity and description
+    ///   2. Glossary terms (if any)
+    ///   3. Context variables (if any)
+    ///   4. Capabilities (if any)
+    ///   5. Active journey state (if any)
+    ///   6. Tool results (if any)
+    ///   7. Matched guidelines
+    ///   8. Canned responses (strict mode hint)
+    ///   9. Recent conversation history
+    ///   10. Instruction to respond
     #[allow(clippy::too_many_arguments)]
     pub async fn build_prompt(
         &self,
-        _agent: &Agent,
-        _interaction: &Interaction,
+        agent: &Agent,
+        interaction: &Interaction,
         matched_guidelines: &[GuidelineMatch],
-        _glossary_terms: &[Term],
-        _context_variables: &[(ContextVariable, ContextVariableValue)],
-        _tool_results: &[crate::tool_calling::caller::ToolExecutionResult],
-        _journey_state: Option<&JourneyNode>,
-        _capabilities: &[Capability],
-        _canned_responses: &[CannedResponse],
+        glossary_terms: &[Term],
+        context_variables: &[(ContextVariable, ContextVariableValue)],
+        tool_results: &[ToolExecutionResult],
+        journey_state: Option<&JourneyNode>,
+        capabilities: &[Capability],
+        canned_responses: &[CannedResponse],
     ) -> EngineResult<String> {
-        let mut prompt = String::new();
-        prompt.push_str("You are an AI agent. Follow these guidelines:\n");
-        for m in matched_guidelines {
-            prompt.push_str(&format!(
-                "- {} (confidence {:.2}): {}\n",
-                m.guideline.content.condition, m.confidence, m.guideline.content.action
+        let mut sections: Vec<String> = Vec::new();
+
+        // 1. Identity
+        sections.push(format!("You are {}: {}", agent.name, agent.description));
+
+        // 2. Glossary
+        if !glossary_terms.is_empty() {
+            let mut s = String::from("Domain glossary:\n");
+            for t in glossary_terms {
+                s.push_str(&format!("  - {}: {}\n", t.name, t.description));
+            }
+            sections.push(s);
+        }
+
+        // 3. Context variables
+        if !context_variables.is_empty() {
+            let mut s = String::from("Known context:\n");
+            for (var, val) in context_variables {
+                s.push_str(&format!("  - {} = {}\n", var.key, val.data));
+            }
+            sections.push(s);
+        }
+
+        // 4. Capabilities
+        if !capabilities.is_empty() {
+            let mut s = String::from("You have these capabilities:\n");
+            for c in capabilities {
+                s.push_str(&format!("  - {}: {}\n", c.name, c.description));
+            }
+            sections.push(s);
+        }
+
+        // 5. Journey state
+        if let Some(node) = journey_state {
+            sections.push(format!(
+                "Current journey step: {} — {}",
+                node.action,
+                node.description.as_deref().unwrap_or("")
             ));
         }
+
+        // 6. Tool results
+        if !tool_results.is_empty() {
+            let mut s = String::from("Recent tool results:\n");
+            for r in tool_results {
+                s.push_str(&format!("  - {}: {}\n", r.tool_id.0, r.result.data));
+            }
+            sections.push(s);
+        }
+
+        // 7. Matched guidelines
+        if !matched_guidelines.is_empty() {
+            let mut s = String::from("Active guidelines (follow these):\n");
+            for m in matched_guidelines {
+                s.push_str(&format!(
+                    "  - {} (confidence {:.2}): {}\n",
+                    m.guideline.content.condition, m.confidence, m.guideline.content.action
+                ));
+            }
+            sections.push(s);
+        }
+
+        // 8. Canned responses
+        if !canned_responses.is_empty() {
+            let mut s = String::from("Available canned responses (prefer these when applicable):\n");
+            for cr in canned_responses {
+                s.push_str(&format!("  - {}\n", cr.value));
+            }
+            sections.push(s);
+        }
+
+        // 9. Recent conversation
+        let messages = interaction.messages();
+        if !messages.is_empty() {
+            let mut s = String::from("Recent conversation:\n");
+            for m in messages.iter().rev().take(10).rev() {
+                let speaker = match m.source {
+                    loon_core::EventSource::Customer => "Customer",
+                    loon_core::EventSource::AiAgent => "Agent",
+                    loon_core::EventSource::System => "System",
+                };
+                s.push_str(&format!("  {}: {}\n", speaker, m.content));
+            }
+            sections.push(s);
+        }
+
+        // 10. Instruction
+        sections.push(
+            "Now respond to the most recent customer message, following the guidelines above."
+                .into(),
+        );
+
+        let prompt = sections.join("\n\n");
+
+        // Token budget check (best-effort; if over budget we just
+        // warn for now — a future iteration will truncate the
+        // conversation history first).
+        let tokens = self.tokenizer.count_tokens(&prompt).await.unwrap_or(0);
+        if (tokens as usize) > self.max_tokens {
+            tracing::warn!(
+                "prompt over token budget: {} > {}",
+                tokens,
+                self.max_tokens
+            );
+        }
+
         Ok(prompt)
     }
 
@@ -64,17 +169,33 @@ impl PromptBuilder {
         &self,
         guidelines: &[loon_core::Guideline],
         interaction: &Interaction,
-        _glossary: &[Term],
+        glossary: &[Term],
     ) -> EngineResult<String> {
-        Ok(format!(
-            "Match these guidelines for: {:?}\nGuidelines:\n{}",
-            interaction.last_customer_message().map(|m| m.content),
-            guidelines
-                .iter()
-                .map(|g| format!("- {}: {}", g.id, g.content.condition))
-                .collect::<Vec<_>>()
-                .join("\n")
-        ))
+        let last_msg = interaction
+            .last_customer_message()
+            .map(|m| m.content)
+            .unwrap_or_default();
+        let mut s =
+            String::from("Match relevant guidelines for the customer's most recent message.\n\n");
+        if !glossary.is_empty() {
+            s.push_str("Domain glossary:\n");
+            for t in glossary {
+                s.push_str(&format!("  - {}: {}\n", t.name, t.description));
+            }
+            s.push('\n');
+        }
+        s.push_str(&format!("Customer message: {}\n\n", last_msg));
+        s.push_str("Available guidelines:\n");
+        for g in guidelines {
+            s.push_str(&format!(
+                "  - id={}, condition='{}', action='{}'\n",
+                g.id.0, g.content.condition, g.content.action
+            ));
+        }
+        s.push_str(
+            "\nReturn the matching guideline id with confidence (0.0-1.0) and a one-sentence rationale.",
+        );
+        Ok(s)
     }
 }
 
@@ -82,7 +203,10 @@ impl PromptBuilder {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use loon_core::{AgentId, Guideline, GuidelineContent};
+    use loon_core::{
+        Agent, AgentId, Event, EventId, EventKind, EventSource, Guideline, GuidelineContent, Term,
+    };
+    use loon_nlp::NlpResult;
 
     struct WsTok;
     #[async_trait]
@@ -92,9 +216,15 @@ mod tests {
         }
     }
 
-    use loon_nlp::NlpResult;
+    fn pb() -> PromptBuilder {
+        PromptBuilder::new(Arc::new(WsTok), 8000)
+    }
 
-    fn mk_guideline(action: &str) -> GuidelineMatch {
+    fn agent() -> Agent {
+        Agent::new("Helpdesk", "Helps users with billing")
+    }
+
+    fn mk_match(action: &str) -> GuidelineMatch {
         let g = Guideline::new(
             GuidelineContent {
                 condition: "user greets".into(),
@@ -112,18 +242,68 @@ mod tests {
         }
     }
 
+    fn mk_message_event(source: EventSource, content: &str) -> Event {
+        Event {
+            id: EventId::new(),
+            source,
+            kind: EventKind::Message,
+            trace_id: "trace".into(),
+            data: serde_json::json!({ "message": content }),
+            metadata: None,
+            creation_utc: chrono::Utc::now(),
+        }
+    }
+
     #[tokio::test]
     async fn build_prompt_includes_action_text() {
-        let tok: Arc<dyn Tokenizer> = Arc::new(WsTok);
-        let pb = PromptBuilder::new(tok, 1000);
-        let agent = Agent::new("a", "b");
-        let interaction = Interaction::new(vec![]);
-        let matches = vec![mk_guideline("say hi back")];
-
-        let prompt = pb
+        let p = pb()
             .build_prompt(
-                &agent,
-                &interaction,
+                &agent(),
+                &Interaction::new(vec![]),
+                &[mk_match("say hi back")],
+                &[],
+                &[],
+                &[],
+                None,
+                &[],
+                &[],
+            )
+            .await
+            .unwrap();
+        assert!(p.contains("say hi back"), "prompt missing action: {p}");
+        assert!(p.contains("user greets"));
+    }
+
+    #[tokio::test]
+    async fn prompt_includes_agent_identity() {
+        let p = pb()
+            .build_prompt(
+                &agent(),
+                &Interaction::new(vec![]),
+                &[],
+                &[],
+                &[],
+                &[],
+                None,
+                &[],
+                &[],
+            )
+            .await
+            .unwrap();
+        assert!(p.contains("Helpdesk"), "prompt missing agent name: {p}");
+        assert!(
+            p.contains("Helps users with billing"),
+            "prompt missing agent description: {p}"
+        );
+    }
+
+    #[tokio::test]
+    async fn prompt_includes_matched_guidelines() {
+        let matches = vec![mk_match("respond politely"), mk_match("offer help")];
+        let p = pb()
+            .build_prompt(
+                &agent(),
+                &Interaction::new(vec![]),
                 &matches,
                 &[],
                 &[],
@@ -134,11 +314,68 @@ mod tests {
             )
             .await
             .unwrap();
+        assert!(p.contains("Active guidelines"));
+        assert!(p.contains("respond politely"));
+        assert!(p.contains("offer help"));
+        assert!(p.contains("confidence 0.95"));
+    }
 
+    #[tokio::test]
+    async fn prompt_includes_glossary_when_present() {
+        let term = Term::new("MRR", "monthly recurring revenue");
+        let p = pb()
+            .build_prompt(
+                &agent(),
+                &Interaction::new(vec![]),
+                &[],
+                &[term],
+                &[],
+                &[],
+                None,
+                &[],
+                &[],
+            )
+            .await
+            .unwrap();
+        assert!(p.contains("Domain glossary"), "missing glossary header: {p}");
+        assert!(p.contains("MRR"), "missing term name: {p}");
         assert!(
-            prompt.contains("say hi back"),
-            "prompt missing action: {prompt}"
+            p.contains("monthly recurring revenue"),
+            "missing term description: {p}"
         );
-        assert!(prompt.contains("user greets"));
+    }
+
+    #[tokio::test]
+    async fn prompt_includes_recent_messages() {
+        let interaction = Interaction::new(vec![
+            mk_message_event(EventSource::Customer, "I need help with billing"),
+            mk_message_event(EventSource::AiAgent, "Sure, I can help"),
+        ]);
+        let p = pb()
+            .build_prompt(
+                &agent(),
+                &interaction,
+                &[],
+                &[],
+                &[],
+                &[],
+                None,
+                &[],
+                &[],
+            )
+            .await
+            .unwrap();
+        assert!(
+            p.contains("Recent conversation"),
+            "missing conversation header: {p}"
+        );
+        assert!(
+            p.contains("Customer: I need help with billing"),
+            "missing customer message: {p}"
+        );
+        assert!(
+            p.contains("Agent: Sure, I can help"),
+            "missing agent message: {p}"
+        );
     }
 }
