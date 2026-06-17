@@ -70,6 +70,12 @@ pub struct ServerBuilder {
     /// tools).
     #[allow(dead_code)]
     openapi_services: Vec<Arc<OpenApiToolService>>,
+    /// Plugin registry registered via
+    /// [`ServerBuilder::with_plugin_registry`]. Phase 8 stores the
+    /// handle but does not yet wire it into the engine (real
+    /// wiring lands when `AlphaEngine` learns to apply plugin
+    /// contributions at startup).
+    plugin_registry: Arc<loon_core::PluginRegistry>,
 }
 
 impl ServerBuilder {
@@ -80,6 +86,7 @@ impl ServerBuilder {
             vector_db: None,
             mcp_clients: Vec::new(),
             openapi_services: Vec::new(),
+            plugin_registry: Arc::new(loon_core::PluginRegistry::new()),
         }
     }
 
@@ -135,6 +142,24 @@ impl ServerBuilder {
     pub fn with_openapi_service(mut self, svc: Arc<OpenApiToolService>) -> Self {
         self.openapi_services.push(svc);
         self
+    }
+
+    /// Register a [`loon_core::PluginRegistry`] that bundles custom
+    /// Tool / Guideline / Journey contributions for the server to
+    /// apply at startup. In Phase 8 this is storage-only — the
+    /// registry is accepted and stored on the builder but the
+    /// engine does not yet enumerate its contributions (real
+    /// wiring lands when `AlphaEngine` learns to apply plugin
+    /// contributions at startup).
+    pub fn with_plugin_registry(mut self, registry: Arc<loon_core::PluginRegistry>) -> Self {
+        self.plugin_registry = registry;
+        self
+    }
+
+    /// Borrow the registered plugin registry. Clones the `Arc`,
+    /// so callers can keep their own handle alive.
+    pub fn plugin_registry(&self) -> Arc<loon_core::PluginRegistry> {
+        self.plugin_registry.clone()
     }
 
     /// Build the [`Server`]. Always succeeds in Phase 1.
@@ -334,5 +359,12 @@ mod tests {
             .await
             .expect("build ok");
         let _: Arc<dyn Engine> = server.engine.clone();
+    }
+
+    #[test]
+    fn builder_holds_plugin_registry() {
+        let reg = Arc::new(loon_core::PluginRegistry::new());
+        let builder = Server::builder().with_plugin_registry(reg.clone());
+        assert_eq!(builder.plugin_registry().plugins().len(), 0);
     }
 }
