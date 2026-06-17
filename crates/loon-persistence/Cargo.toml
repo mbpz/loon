@@ -16,6 +16,7 @@ futures = { workspace = true }
 mongodb = "3"
 bson = "2"
 reqwest = { workspace = true }
+qdrant-client = "1.12"
 
 [dev-dependencies]
 tempfile = "3"

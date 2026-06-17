@@ -27,6 +27,7 @@ pub struct VectorHit {
 }
 
 pub mod chroma;
+pub mod qdrant;
 
 #[cfg(test)]
 mod tests {
