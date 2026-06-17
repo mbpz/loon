@@ -281,7 +281,7 @@ mod tests {
         async fn create(&self, s: loon_core::Session) -> CoreResult<loon_core::Session> {
             Ok(s)
         }
-        async fn read(&self, id: &SessionId) -> CoreResult<Option<loon_core::Session>> {
+        async fn read(&self, _id: &SessionId) -> CoreResult<Option<loon_core::Session>> {
             Ok(Some(loon_core::Session::new(&AgentId::new())))
         }
         async fn update(
@@ -633,6 +633,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     struct StubNlp;
     #[async_trait]
     impl NlpService for StubNlp {
