@@ -44,6 +44,11 @@ impl McpClient {
         }
     }
 
+    /// The configured server name (e.g. for use as a registry key).
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Compute the stable tool ID for a given tool name.
     /// Format: `mcp:<server>:<tool_name>` so it's deterministic.
     pub fn tool_id(&self, tool_name: &str) -> ToolId {
