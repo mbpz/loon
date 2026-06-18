@@ -151,8 +151,9 @@ mod tests {
 
     #[tokio::test]
     async fn router_builds_with_empty_server() {
-        // Phase 1 SDK builder returns a Server without external
-        // deps, so we can build the router for the unit test.
+        // The SDK builder returns a Server with an in-memory
+        // EntityQueries graph (no external deps), so we can build
+        // the router for the unit test without wiring a database.
         let server = Server::builder().build().await.expect("build server");
         let state = Arc::new(AppState {
             server: Arc::new(server),
