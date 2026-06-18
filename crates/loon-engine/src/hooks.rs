@@ -75,6 +75,79 @@ impl EngineHooks {
         }
         Ok(true)
     }
+
+    /// Register a hook for the `on_acknowledging` point.
+    pub fn on_acknowledging<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_acknowledging.push(Arc::new(hook));
+        self
+    }
+    /// Register a hook for the `on_acknowledged` point.
+    pub fn on_acknowledged<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_acknowledged.push(Arc::new(hook));
+        self
+    }
+    /// Register a hook for the `on_preparing` point.
+    pub fn on_preparing<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_preparing.push(Arc::new(hook));
+        self
+    }
+    /// Register a hook for the `on_preparation_iteration_start` point.
+    pub fn on_preparation_iteration_start<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_preparation_iteration_start.push(Arc::new(hook));
+        self
+    }
+    /// Register a hook for the `on_preparation_iteration_end` point.
+    pub fn on_preparation_iteration_end<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_preparation_iteration_end.push(Arc::new(hook));
+        self
+    }
+    /// Register a hook for the `on_generating_messages` point.
+    pub fn on_generating_messages<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_generating_messages.push(Arc::new(hook));
+        self
+    }
+    /// Register a hook for the `on_message_generated` point.
+    pub fn on_message_generated<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_message_generated.push(Arc::new(hook));
+        self
+    }
+    /// Register a hook for the `on_messages_emitted` point.
+    pub fn on_messages_emitted<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_messages_emitted.push(Arc::new(hook));
+        self
+    }
+    /// Register a hook for the `on_error` point.
+    pub fn on_error<F>(&mut self, hook: F) -> &mut Self
+    where
+        F: Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync + 'static,
+    {
+        self.on_error.push(Arc::new(hook));
+        self
+    }
 }
 
 #[cfg(test)]
@@ -169,5 +242,34 @@ mod tests {
             error: None,
         };
         assert!(!hooks.run_chain(&hooks.on_acknowledging, &ctx).unwrap());
+    }
+
+    #[test]
+    fn builder_method_registers_hook() {
+        let mut hooks = EngineHooks::default();
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let c1 = counter.clone();
+        hooks.on_acknowledging(move |_ctx| {
+            c1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(EngineHookResult::CallNext)
+        });
+        let ctx = HookContext { point: "test", payload: None, error: None };
+        assert!(hooks.run_chain(&hooks.on_acknowledging, &ctx).unwrap());
+        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn builder_methods_chain() {
+        let mut hooks = EngineHooks::default();
+        // All builder methods return &mut Self so they can chain.
+        hooks
+            .on_acknowledging(|_| Ok(EngineHookResult::CallNext))
+            .on_acknowledged(|_| Ok(EngineHookResult::CallNext))
+            .on_preparing(|_| Ok(EngineHookResult::CallNext))
+            .on_messages_emitted(|_| Ok(EngineHookResult::CallNext));
+        assert_eq!(hooks.on_acknowledging.len(), 1);
+        assert_eq!(hooks.on_acknowledged.len(), 1);
+        assert_eq!(hooks.on_preparing.len(), 1);
+        assert_eq!(hooks.on_messages_emitted.len(), 1);
     }
 }
