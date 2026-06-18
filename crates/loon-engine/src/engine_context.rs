@@ -182,6 +182,59 @@ impl EngineContext {
         }
     }
 
+    /// Load a fully-populated `EngineContext` from `EntityQueries`.
+    ///
+    /// - Reads agent and session by id from the supplied queries.
+    /// - Reads the customer referenced by the session if any, otherwise
+    ///   defaults to a stub `Customer::new("anonymous")`.
+    /// - Reads the session's events and projects them into an
+    ///   [`Interaction`].
+    /// - Wires both the session and response `EventEmitter`s from the
+    ///   supplied `Arc`s.
+    pub async fn from_queries(
+        queries: &loon_core::entity_cq::EntityQueries,
+        info: Context,
+        session_event_emitter: Arc<dyn EventEmitter>,
+        response_event_emitter: Arc<dyn EventEmitter>,
+        logger: Arc<dyn Logger>,
+        tracer: Arc<dyn Tracer>,
+    ) -> EngineResult<Self> {
+        let agent = queries
+            .read_agent(&info.agent_id)
+            .await
+            .map_err(|e| crate::error::EngineError::ContextLoadFailed(e.to_string()))?;
+        let session = queries
+            .read_session(&info.session_id)
+            .await
+            .map_err(|e| crate::error::EngineError::ContextLoadFailed(e.to_string()))?;
+        let customer = if let Some(cid) = &session.customer_id {
+            queries
+                .read_customer(cid)
+                .await
+                .map_err(|e| crate::error::EngineError::ContextLoadFailed(e.to_string()))?
+        } else {
+            loon_core::Customer::new("anonymous")
+        };
+        let events = queries
+            .find_events(&info.session_id)
+            .await
+            .map_err(|e| crate::error::EngineError::ContextLoadFailed(e.to_string()))?;
+        let interaction = Interaction::new(events);
+        Ok(Self {
+            info,
+            logger,
+            tracer,
+            agent,
+            customer,
+            session,
+            session_event_emitter,
+            response_event_emitter,
+            interaction,
+            state: parking_lot::Mutex::new(ResponseState::default()),
+            creation: loon_core::Stopwatch::start(),
+        })
+    }
+
     /// Phase-1 stub: real implementation will emit a tool event via
     /// `response_event_emitter` once preparation is wired up.
     pub async fn add_tool_event(
@@ -321,5 +374,46 @@ mod tests {
         // Verify state mutex initializes empty
         assert!(ctx.state.lock().iterations.is_empty());
         assert!(!ctx.state.lock().prepared_to_respond);
+    }
+
+    #[tokio::test]
+    async fn from_queries_loads_real_context() {
+        use loon_core::basic_tracer::BasicTracer;
+        use loon_core::console_logger::ConsoleLogger;
+        use loon_core::entity_cq::EntityQueries;
+        use loon_core::{Agent, Session};
+
+        let queries = EntityQueries::in_memory();
+        let agent = Agent::new("agent", "test agent");
+        let agent_id = agent.id.clone();
+        queries.agent_store.create(agent).await.unwrap();
+        let session = Session::new(&agent_id);
+        let session_id = session.id.clone();
+        queries.session_store.create(session).await.unwrap();
+
+        let info = Context {
+            session_id: session_id.clone(),
+            agent_id: agent_id.clone(),
+        };
+        let logger: Arc<dyn Logger> = Arc::new(ConsoleLogger);
+        let tracer: Arc<dyn Tracer> = Arc::new(BasicTracer::new());
+        let emitter: Arc<dyn loon_emission::EventEmitter> = Arc::new(NoopEmitter);
+
+        let ctx = EngineContext::from_queries(
+            &queries,
+            info,
+            emitter.clone(),
+            emitter,
+            logger,
+            tracer,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(ctx.agent.name, "agent");
+        assert_eq!(ctx.customer.name, "anonymous");
+        assert_eq!(ctx.interaction.events.len(), 0);
+        assert_eq!(ctx.info.session_id, session_id);
+        assert_eq!(ctx.info.agent_id, agent_id);
     }
 }
