@@ -57,10 +57,17 @@ impl Engine for AlphaEngine {
         context: &Context,
         event_emitter: &dyn EventEmitter,
     ) -> EngineResult<bool> {
+        use crate::hooks::HookContext;
         use loon_core::{MessageOutputMode, Participant, StatusEventData};
         use loon_emission::MessageEmitData;
 
         let trace_id = context.session_id.0.clone();
+
+        // on_acknowledging hook (before status emit)
+        let hctx = HookContext { point: "on_acknowledging", payload: None, error: None };
+        if !self.hooks.run_chain(&self.hooks.on_acknowledging, &hctx)? {
+            return Err(crate::error::EngineError::HookBail);
+        }
 
         // 0. Acknowledge
         let _ = event_emitter
@@ -74,9 +81,21 @@ impl Engine for AlphaEngine {
             )
             .await;
 
+        // on_acknowledged hook (after status emit)
+        let hctx = HookContext { point: "on_acknowledged", payload: None, error: None };
+        if !self.hooks.run_chain(&self.hooks.on_acknowledged, &hctx)? {
+            return Err(crate::error::EngineError::HookBail);
+        }
+
         // 1. Load agent + session
         let agent = self.queries.read_agent(&context.agent_id).await?;
         let session = self.queries.read_session(&context.session_id).await?;
+
+        // on_preparing hook (after agent+session load)
+        let hctx = HookContext { point: "on_preparing", payload: None, error: None };
+        if !self.hooks.run_chain(&self.hooks.on_preparing, &hctx)? {
+            return Err(crate::error::EngineError::HookBail);
+        }
 
         // 2. Context fill (parallel)
         let (guidelines, _ctx_vars, _journeys, _capabilities, canned_responses) = tokio::try_join!(
@@ -94,6 +113,18 @@ impl Engine for AlphaEngine {
             if iterations > 5 {
                 break;
             }
+
+            // on_preparation_iteration_start hook
+            let payload = serde_json::json!({"iteration": iterations});
+            let hctx = HookContext {
+                point: "on_preparation_iteration_start",
+                payload: Some(&payload),
+                error: None,
+            };
+            if !self.hooks.run_chain(&self.hooks.on_preparation_iteration_start, &hctx)? {
+                return Err(crate::error::EngineError::HookBail);
+            }
+
             let match_ctx = crate::guideline_matching::GuidelineMatchingContext {
                 agent: agent.clone(),
                 session: session.clone(),
@@ -116,6 +147,21 @@ impl Engine for AlphaEngine {
                 .tool_caller
                 .call_tools(&empty_engine_context(), &insights)
                 .await?;
+
+            // on_preparation_iteration_end hook
+            let payload = serde_json::json!({
+                "iteration": iterations,
+                "tools_executed": executed.len(),
+            });
+            let hctx = HookContext {
+                point: "on_preparation_iteration_end",
+                payload: Some(&payload),
+                error: None,
+            };
+            if !self.hooks.run_chain(&self.hooks.on_preparation_iteration_end, &hctx)? {
+                return Err(crate::error::EngineError::HookBail);
+            }
+
             if executed.is_empty() {
                 // Persist the resolved list on the response state so
                 // message generation can read it. Phase 1 just
@@ -125,6 +171,12 @@ impl Engine for AlphaEngine {
                     resolved.iter().map(|m| m.guideline.clone()).collect();
                 break;
             }
+        }
+
+        // on_generating_messages hook (before LLM call)
+        let hctx = HookContext { point: "on_generating_messages", payload: None, error: None };
+        if !self.hooks.run_chain(&self.hooks.on_generating_messages, &hctx)? {
+            return Err(crate::error::EngineError::HookBail);
         }
 
         // 4. Generate message
@@ -141,6 +193,17 @@ impl Engine for AlphaEngine {
             }
         };
 
+        // on_message_generated hook (after LLM, before emit)
+        let payload = serde_json::json!({"message_count": messages.len()});
+        let hctx = HookContext {
+            point: "on_message_generated",
+            payload: Some(&payload),
+            error: None,
+        };
+        if !self.hooks.run_chain(&self.hooks.on_message_generated, &hctx)? {
+            return Err(crate::error::EngineError::HookBail);
+        }
+
         // 5. Emit message events
         for m in messages {
             let _ = event_emitter
@@ -154,6 +217,12 @@ impl Engine for AlphaEngine {
                     None,
                 )
                 .await;
+        }
+
+        // on_messages_emitted hook (after all messages emitted)
+        let hctx = HookContext { point: "on_messages_emitted", payload: None, error: None };
+        if !self.hooks.run_chain(&self.hooks.on_messages_emitted, &hctx)? {
+            return Err(crate::error::EngineError::HookBail);
         }
 
         // 6. Done
@@ -954,5 +1023,53 @@ mod tests {
             "expected at least one message event, got {:?}",
             events
         );
+    }
+
+    #[tokio::test]
+    async fn process_aborts_when_acknowledging_hook_bails() {
+        use crate::hooks::{EngineHook, EngineHookResult, HookContext};
+        use std::sync::Arc;
+
+        let mut engine = make_engine();
+        let bail_hook: EngineHook = Arc::new(|_ctx: &HookContext| Ok(EngineHookResult::Bail));
+        engine.hooks.on_acknowledging.push(bail_hook);
+
+        let ctx = Context {
+            session_id: SessionId::new(),
+            agent_id: AgentId::new(),
+        };
+        let emitter = CountingEmitter {
+            events: parking_lot::Mutex::new(Vec::new()),
+        };
+        let result = engine.process(&ctx, &emitter).await;
+        assert!(matches!(
+            result,
+            Err(crate::error::EngineError::HookBail)
+        ));
+        // No events should have been emitted (bail before status emit)
+        assert!(emitter.events.lock().is_empty());
+    }
+
+    #[tokio::test]
+    async fn process_aborts_when_messages_emitted_hook_bails() {
+        use crate::hooks::{EngineHook, EngineHookResult, HookContext};
+        use std::sync::Arc;
+
+        let mut engine = make_engine();
+        let bail_hook: EngineHook = Arc::new(|_ctx: &HookContext| Ok(EngineHookResult::Bail));
+        engine.hooks.on_messages_emitted.push(bail_hook);
+
+        let ctx = Context {
+            session_id: SessionId::new(),
+            agent_id: AgentId::new(),
+        };
+        let emitter = CountingEmitter {
+            events: parking_lot::Mutex::new(Vec::new()),
+        };
+        let result = engine.process(&ctx, &emitter).await;
+        assert!(matches!(
+            result,
+            Err(crate::error::EngineError::HookBail)
+        ));
     }
 }

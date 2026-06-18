@@ -33,7 +33,7 @@ pub type EngineHook =
 pub struct HookContext<'a> {
     pub point: &'a str,
     pub payload: Option<&'a JsonValue>,
-    pub error: Option<&'a (dyn std::error::Error + 'static)>,
+    pub error: Option<&'a (dyn std::error::Error + Send + Sync + 'static)>,
 }
 
 /// Container of all 15 hook points.
