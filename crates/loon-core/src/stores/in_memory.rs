@@ -30,9 +30,9 @@ use crate::{
     Customer, CustomerId, CustomerUpdateParams, EvaluationId, Event, EventId, EventUpdateParams,
     GlossaryTermId, Guideline, GuidelineId, GuidelineToolAssociation, GuidelineToolAssociationId,
     GuidelineUpdateParams, Journey, JourneyId, JourneyUpdateParams, JsonValue, Observation,
-    ObservationUpdateParams, Relationship, RelationshipEntity, RelationshipId, Retriever, RetrieverId, Session, SessionId,
-    SessionUpdateParams, Shot, ShotId, Tag, TagId, TagUpdateParams, Term, Tool, ToolId,
-    ToolUpdateParams, UniqueId,
+    ObservationUpdateParams, Relationship, RelationshipEntity, RelationshipId, Retriever,
+    RetrieverId, Session, SessionId, SessionUpdateParams, Shot, ShotId, Tag, TagId,
+    TagUpdateParams, Term, Tool, ToolId, ToolUpdateParams, UniqueId,
 };
 
 // ---------------------------------------------------------------------
