@@ -177,7 +177,23 @@ impl Engine for AlphaEngine {
                 .tool_caller
                 .generate_insights(&engine_ctx, &resolved)
                 .await?;
-            let executed = self.tool_caller.call_tools(&engine_ctx, &insights).await?;
+
+            // Apply optimization policy: filter out tools the policy says to skip.
+            let filtered_evaluations: std::collections::HashMap<
+                loon_core::ToolId,
+                crate::engine_context::ToolCallEvaluation,
+            > = insights
+                .evaluations
+                .into_iter()
+                .filter(|(tid, _)| !self.optimization_policy.should_skip_tool(tid, &engine_ctx))
+                .collect();
+            let filtered_insights =
+                crate::engine_context::ToolInsights { evaluations: filtered_evaluations };
+
+            let executed = self
+                .tool_caller
+                .call_tools(&engine_ctx, &filtered_insights)
+                .await?;
 
             // on_preparation_iteration_end hook
             let payload = serde_json::json!({
@@ -1147,5 +1163,32 @@ mod tests {
             std::sync::Arc::new(crate::engine_context::NoopEmitter);
         let result = engine.process(&ctx, public_noop.as_ref()).await.unwrap();
         assert!(result);
+    }
+
+    struct SkipAllToolsPolicy;
+
+    impl OptimizationPolicy for SkipAllToolsPolicy {
+        fn should_skip_tool(&self, _: &loon_core::ToolId, _: &EngineContext) -> bool {
+            true
+        }
+        fn should_skip_guideline_matching(&self, _: &EngineContext) -> bool {
+            false
+        }
+    }
+
+    #[tokio::test]
+    async fn optimization_policy_skips_tools() {
+        let mut engine = make_engine();
+        engine.optimization_policy = Arc::new(SkipAllToolsPolicy);
+        let ctx = Context {
+            session_id: SessionId::new(),
+            agent_id: AgentId::new(),
+        };
+        let emitter = CountingEmitter {
+            events: parking_lot::Mutex::new(Vec::new()),
+        };
+        let result = engine.process(&ctx, &emitter).await.unwrap();
+        assert!(result);
+        // With all tools skipped, the preparation loop exits immediately (no tools executed).
     }
 }

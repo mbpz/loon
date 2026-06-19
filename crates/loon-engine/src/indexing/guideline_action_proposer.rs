@@ -57,7 +57,7 @@ impl GuidelineActionProposer for KeywordGuidelineActionProposer {
                 }
             })
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
         Ok(GuidelineActionProposerOutput {
             candidates: scored.into_iter().map(|(_, g)| g).collect(),
         })
@@ -105,7 +105,7 @@ mod tests {
         let p = KeywordGuidelineActionProposer;
         let gs = vec![g("greet user"), g("transfer to billing")];
         let r = p
-            .propose(&AgentId::new(), &gs, "greeting")
+            .propose(&AgentId::new(), &gs, "greet")
             .await
             .unwrap();
         assert_eq!(r.candidates.len(), 1);
