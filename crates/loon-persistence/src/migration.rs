@@ -13,9 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use std::sync::Arc;
 
-use crate::document::{
-    Document, DocumentDatabase, DocumentDatabaseHandle, DocumentUpdate,
-};
+use crate::document::{Document, DocumentDatabase, DocumentDatabaseHandle, DocumentUpdate};
 use crate::error::PersistenceResult;
 use crate::filter::DocumentFilter;
 

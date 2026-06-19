@@ -165,8 +165,8 @@ impl<T: Schematic> SchematicGenerator<T> for AnthropicSchematicGenerator<T> {
             .clone()
             .ok_or_else(|| NlpError::Upstream("tool_use block missing input".into()))?;
 
-        let value: T = serde_json::from_value(input)
-            .map_err(|e| NlpError::InvalidSchema(e.to_string()))?;
+        let value: T =
+            serde_json::from_value(input).map_err(|e| NlpError::InvalidSchema(e.to_string()))?;
 
         let info = GenerationInfo {
             model: self.config.model.clone(),

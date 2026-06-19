@@ -112,15 +112,28 @@ mod tests {
             id: &ContextVariableId,
             p: ContextVariableUpdateParams,
         ) -> CoreResult<ContextVariable> {
-            let mut g = self.data.lock();
-            let v = g.get_mut(id).unwrap();
-            if let Some(k) = p.key {
-                v.key = k;
+            // Phase 1: capture the (id, key) from the descriptor while
+            // holding the data lock, mirroring the in-memory impl.
+            let (var_id, value_key) = {
+                let mut g = self.data.lock();
+                let v = g.get_mut(id).ok_or_else(|| {
+                    loon_core::CoreError::NotFound(loon_core::UniqueId(id.0.clone()))
+                })?;
+                if let Some(k) = p.key {
+                    v.key = k;
+                }
+                (v.id.clone(), v.key.clone())
+            };
+            // Phase 2: if data is provided, persist to the value store
+            // keyed by the variable's own key.
+            if let Some(payload) = p.data {
+                self.upsert_value(&var_id, &value_key, payload).await?;
             }
-            // data is metadata-only at the variable level in this fake; the
-            // actual value store is updated via upsert_value.
-            let _ = p.data;
-            Ok(v.clone())
+            // Phase 3: re-read the descriptor and return it.
+            let g = self.data.lock();
+            Ok(g.get(&var_id)
+                .cloned()
+                .expect("descriptor must still exist"))
         }
         async fn delete(&self, id: &ContextVariableId) -> CoreResult<()> {
             self.data.lock().remove(id);
@@ -144,6 +157,17 @@ mod tests {
                 .lock()
                 .insert((var_id.clone(), key.into()), val.clone());
             Ok(val)
+        }
+        async fn read_value(
+            &self,
+            var_id: &ContextVariableId,
+            key: &str,
+        ) -> CoreResult<Option<ContextVariableValue>> {
+            Ok(self
+                .values
+                .lock()
+                .get(&(var_id.clone(), key.into()))
+                .cloned())
         }
     }
 

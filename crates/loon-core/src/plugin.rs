@@ -11,9 +11,7 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::{
-    AgentId, CoreResult, Guideline, Journey, Tool, ToolService,
-};
+use crate::{AgentId, CoreResult, Guideline, Journey, Tool, ToolService};
 
 /// What a plugin can contribute. Each variant is one of the entity
 /// kinds the SDK accepts as a runtime injection point.
@@ -89,10 +87,7 @@ impl PluginRegistry {
                         .or_default()
                         .push(guideline);
                 }
-                PluginContribution::Journey {
-                    agent_id,
-                    journey,
-                } => {
+                PluginContribution::Journey { agent_id, journey } => {
                     grouped.journeys.entry(agent_id).or_default().push(journey);
                 }
                 PluginContribution::ToolService { name, service } => {

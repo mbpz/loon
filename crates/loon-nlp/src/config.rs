@@ -85,9 +85,15 @@ mod tests {
     #[test]
     fn provider_defaults_match() {
         assert_eq!(Provider::OpenAI.default_model(), "gpt-4o-mini");
-        assert_eq!(Provider::Anthropic.default_model(), "claude-3-5-sonnet-20241022");
+        assert_eq!(
+            Provider::Anthropic.default_model(),
+            "claude-3-5-sonnet-20241022"
+        );
         assert_eq!(Provider::Gemini.default_model(), "gemini-1.5-flash");
-        assert_eq!(Provider::OpenAI.default_endpoint(), "https://api.openai.com");
+        assert_eq!(
+            Provider::OpenAI.default_endpoint(),
+            "https://api.openai.com"
+        );
         assert_eq!(
             Provider::Anthropic.default_endpoint(),
             "https://api.anthropic.com"

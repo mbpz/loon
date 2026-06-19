@@ -91,8 +91,8 @@ impl CannedResponseGenerator {
             .await
             .map_err(|e| EngineError::MessageGenerationFailed(e.to_string()))?;
 
-        let parsed: CannedResponseSelectionResult = serde_json::from_value(result.value)
-            .unwrap_or_default();
+        let parsed: CannedResponseSelectionResult =
+            serde_json::from_value(result.value).unwrap_or_default();
 
         let idx = parsed.canned_response_index;
         if idx < 0 || (idx as usize) >= canned_responses.len() {

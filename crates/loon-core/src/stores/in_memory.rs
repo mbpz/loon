@@ -18,7 +18,6 @@ fn matches_all_tags(requested: &[TagId], owned: &[TagId]) -> bool {
     requested.is_empty() || requested.iter().all(|t| owned.contains(t))
 }
 
-
 use crate::stores::{
     AgentStore, CannedResponseStore, CapabilityStore, ContextVariableStore, CustomerStore,
     EvaluationStore, GlossaryStore, GuidelineStore, GuidelineToolAssociationStore, JourneyStore,
@@ -30,9 +29,10 @@ use crate::{
     ContextVariableId, ContextVariableUpdateParams, ContextVariableValue, CoreError, CoreResult,
     Customer, CustomerId, CustomerUpdateParams, EvaluationId, Event, EventId, EventUpdateParams,
     GlossaryTermId, Guideline, GuidelineId, GuidelineToolAssociation, GuidelineToolAssociationId,
-    GuidelineUpdateParams, JsonValue, Journey, JourneyId, JourneyUpdateParams, Observation,
-    Relationship, RelationshipEntity, RelationshipId, Retriever, RetrieverId, Session, SessionId,
-    SessionUpdateParams, Shot, ShotId, Tag, TagId, Term, Tool, ToolId, UniqueId,
+    GuidelineUpdateParams, Journey, JourneyId, JourneyUpdateParams, JsonValue, Observation,
+    ObservationUpdateParams, Relationship, RelationshipEntity, RelationshipId, Retriever, RetrieverId, Session, SessionId,
+    SessionUpdateParams, Shot, ShotId, Tag, TagId, TagUpdateParams, Term, Tool, ToolId,
+    ToolUpdateParams, UniqueId,
 };
 
 // ---------------------------------------------------------------------
@@ -365,6 +365,22 @@ impl ToolStore for InMemoryToolStore {
     async fn read(&self, id: &ToolId) -> CoreResult<Option<Tool>> {
         Ok(self.data.lock().get(id).cloned())
     }
+    async fn update(&self, id: &ToolId, params: ToolUpdateParams) -> CoreResult<Tool> {
+        let mut d = self.data.lock();
+        let t = d
+            .get_mut(id)
+            .ok_or_else(|| CoreError::NotFound(UniqueId(id.0.clone())))?;
+        if let Some(name) = params.name {
+            t.name = name;
+        }
+        if let Some(description) = params.description {
+            t.description = description;
+        }
+        if let Some(parameters_schema) = params.parameters_schema {
+            t.parameters_schema = parameters_schema;
+        }
+        Ok(t.clone())
+    }
     async fn delete(&self, id: &ToolId) -> CoreResult<()> {
         self.data.lock().remove(id);
         let mut by_agent = self.by_agent.lock();
@@ -413,6 +429,26 @@ impl EvaluationStore for InMemoryEvaluationStore {
     }
     async fn read(&self, id: &EvaluationId) -> CoreResult<Option<Observation>> {
         Ok(self.data.lock().get(id).cloned())
+    }
+    async fn update(
+        &self,
+        id: &EvaluationId,
+        params: ObservationUpdateParams,
+    ) -> CoreResult<Observation> {
+        let mut d = self.data.lock();
+        let o = d
+            .get_mut(id)
+            .ok_or_else(|| CoreError::NotFound(UniqueId(id.0.clone())))?;
+        if let Some(c) = params.condition {
+            o.condition = c;
+        }
+        if let Some(t) = params.tools {
+            o.tools = t;
+        }
+        if let Some(e) = params.enabled {
+            o.enabled = e;
+        }
+        Ok(o.clone())
     }
     async fn delete(&self, id: &EvaluationId) -> CoreResult<()> {
         self.data.lock().remove(id);
@@ -584,17 +620,37 @@ impl ContextVariableStore for InMemoryContextVariableStore {
         id: &ContextVariableId,
         p: ContextVariableUpdateParams,
     ) -> CoreResult<ContextVariable> {
-        let mut d = self.data.lock();
-        let v = d
-            .get_mut(id)
-            .ok_or_else(|| CoreError::NotFound(UniqueId(id.0.clone())))?;
-        if let Some(k) = p.key {
-            v.key = k;
+        // Phase 1: capture the (id, key) we need from the descriptor
+        // while holding the data lock. Drop the lock before any
+        // `await` to avoid borrow-checker issues and to keep the
+        // critical section tight.
+        let (var_id, value_key) = {
+            let mut d = self.data.lock();
+            let v = d
+                .get_mut(id)
+                .ok_or_else(|| CoreError::NotFound(UniqueId(id.0.clone())))?;
+            if let Some(k) = p.key {
+                v.key = k;
+            }
+            (v.id.clone(), v.key.clone())
+        };
+
+        // Phase 2: if the caller passed a data payload, persist it to
+        // the value store keyed by the variable's own key. This makes
+        // `update` the high-level "modify anything" entry point
+        // while keeping `upsert_value` available for low-level
+        // access by an explicit value key.
+        if let Some(payload) = p.data {
+            self.upsert_value(&var_id, &value_key, payload).await?;
         }
-        // `data` lives on `ContextVariableValue`, not the variable
-        // descriptor itself — surface it via `upsert_value`.
-        let _ = p.data;
-        Ok(v.clone())
+
+        // Phase 3: re-read and return the (now-mutated) descriptor.
+        Ok(self
+            .data
+            .lock()
+            .get(&var_id)
+            .cloned()
+            .expect("descriptor must still exist after update"))
     }
     async fn delete(&self, id: &ContextVariableId) -> CoreResult<()> {
         self.data.lock().remove(id);
@@ -625,6 +681,17 @@ impl ContextVariableStore for InMemoryContextVariableStore {
             .lock()
             .insert((var_id.clone(), key.to_string()), val.clone());
         Ok(val)
+    }
+    async fn read_value(
+        &self,
+        var_id: &ContextVariableId,
+        key: &str,
+    ) -> CoreResult<Option<ContextVariableValue>> {
+        Ok(self
+            .values
+            .lock()
+            .get(&(var_id.clone(), key.to_string()))
+            .cloned())
     }
 }
 
@@ -827,6 +894,16 @@ impl TagStore for InMemoryTagStore {
     async fn read(&self, id: &TagId) -> CoreResult<Option<Tag>> {
         Ok(self.data.lock().get(id).cloned())
     }
+    async fn update(&self, id: &TagId, params: TagUpdateParams) -> CoreResult<Tag> {
+        let mut d = self.data.lock();
+        let t = d
+            .get_mut(id)
+            .ok_or_else(|| CoreError::NotFound(UniqueId(id.0.clone())))?;
+        if let Some(name) = params.name {
+            t.name = name;
+        }
+        Ok(t.clone())
+    }
     async fn list(&self) -> CoreResult<Vec<Tag>> {
         Ok(self.data.lock().values().cloned().collect())
     }
@@ -997,8 +1074,9 @@ impl ShotStore for InMemoryShotStore {
 mod tests {
     use super::*;
     use crate::{
-        Criticality, GuidelineContent, JourneyNode, JourneyNodeId, RelationshipEntityKind,
-        RelationshipKind, ToolKind,
+        ContextVariable, ContextVariableId, ContextVariableUpdateParams, Criticality,
+        GuidelineContent, JourneyNode, JourneyNodeId, RelationshipEntityKind, RelationshipKind,
+        TagUpdateParams, ToolKind, ToolUpdateParams,
     };
 
     #[tokio::test]
@@ -1211,7 +1289,11 @@ mod tests {
             kind: RelationshipEntityKind::Guideline,
             id: "b".into(),
         };
-        let r = Relationship::new(entity_a.clone(), entity_b.clone(), RelationshipKind::Excludes);
+        let r = Relationship::new(
+            entity_a.clone(),
+            entity_b.clone(),
+            RelationshipKind::Excludes,
+        );
         let id = r.id.clone();
         s.create(r).await.unwrap();
         let loaded = s.read(&id).await.unwrap().unwrap();
@@ -1304,7 +1386,10 @@ mod tests {
         // Tag no agent carries ⇒ empty result.
         let lonely = TagId::new();
         let none = s.list(&[lonely]).await.unwrap();
-        assert!(none.is_empty(), "filter for a tag nobody carries must be empty");
+        assert!(
+            none.is_empty(),
+            "filter for a tag nobody carries must be empty"
+        );
     }
 
     /// `InMemoryGuidelineStore::list` must apply **both** the
@@ -1324,8 +1409,14 @@ mod tests {
 
         // X, tag T
         let mut g1 = Guideline::new(
-            GuidelineContent { condition: "c1".into(), action: "a".into(), description: None },
-            &agent_x, true, 0,
+            GuidelineContent {
+                condition: "c1".into(),
+                action: "a".into(),
+                description: None,
+            },
+            &agent_x,
+            true,
+            0,
         );
         g1.tags = vec![tag_t.clone()];
         let id1 = g1.id.clone();
@@ -1333,16 +1424,28 @@ mod tests {
 
         // X, untagged
         let g2 = Guideline::new(
-            GuidelineContent { condition: "c2".into(), action: "a".into(), description: None },
-            &agent_x, true, 0,
+            GuidelineContent {
+                condition: "c2".into(),
+                action: "a".into(),
+                description: None,
+            },
+            &agent_x,
+            true,
+            0,
         );
         let id2 = g2.id.clone();
         s.create(g2).await.unwrap();
 
         // X, tag T + tag_other
         let mut g3 = Guideline::new(
-            GuidelineContent { condition: "c3".into(), action: "a".into(), description: None },
-            &agent_x, true, 0,
+            GuidelineContent {
+                condition: "c3".into(),
+                action: "a".into(),
+                description: None,
+            },
+            &agent_x,
+            true,
+            0,
         );
         g3.tags = vec![tag_t.clone(), tag_other.clone()];
         let id3 = g3.id.clone();
@@ -1350,8 +1453,14 @@ mod tests {
 
         // Y, tag T (must not leak into agent-X queries)
         let mut g4 = Guideline::new(
-            GuidelineContent { condition: "c4".into(), action: "a".into(), description: None },
-            &agent_y, true, 0,
+            GuidelineContent {
+                condition: "c4".into(),
+                action: "a".into(),
+                description: None,
+            },
+            &agent_y,
+            true,
+            0,
         );
         g4.tags = vec![tag_t.clone()];
         let id4 = g4.id.clone();
@@ -1363,12 +1472,17 @@ mod tests {
         let x_all_ids: std::collections::HashSet<_> = x_all.iter().map(|g| g.id.clone()).collect();
         assert_eq!(
             x_all_ids,
-            [id1.clone(), id2.clone(), id3.clone()].into_iter().collect(),
+            [id1.clone(), id2.clone(), id3.clone()]
+                .into_iter()
+                .collect(),
             "agent filter alone must drop agent-Y guideline"
         );
 
         // Single tag T on agent X ⇒ g1, g3 (g2 is untagged, g4 is other agent).
-        let mut x_t = s.list(&agent_x, std::slice::from_ref(&tag_t)).await.unwrap();
+        let mut x_t = s
+            .list(&agent_x, std::slice::from_ref(&tag_t))
+            .await
+            .unwrap();
         x_t.sort_by(|a, b| a.content.condition.cmp(&b.content.condition));
         let x_t_ids: std::collections::HashSet<_> = x_t.iter().map(|g| g.id.clone()).collect();
         assert_eq!(
@@ -1378,7 +1492,10 @@ mod tests {
         );
 
         // AND-semantics: tag T + tag_other on agent X ⇒ only g3.
-        let x_both = s.list(&agent_x, &[tag_t.clone(), tag_other.clone()]).await.unwrap();
+        let x_both = s
+            .list(&agent_x, &[tag_t.clone(), tag_other.clone()])
+            .await
+            .unwrap();
         assert_eq!(
             x_both.iter().map(|g| g.id.clone()).collect::<Vec<_>>(),
             vec![id3.clone()],
@@ -1386,11 +1503,18 @@ mod tests {
         );
 
         // Tag no guideline carries ⇒ empty.
-        assert!(s.list(&agent_x, std::slice::from_ref(&tag_lonely)).await.unwrap().is_empty());
+        assert!(s
+            .list(&agent_x, std::slice::from_ref(&tag_lonely))
+            .await
+            .unwrap()
+            .is_empty());
 
         // Same tag T on agent Y ⇒ only g4 (proves agent_id filter is
         // applied first / in combination, not bypassed by tag).
-        let y_t = s.list(&agent_y, std::slice::from_ref(&tag_t)).await.unwrap();
+        let y_t = s
+            .list(&agent_y, std::slice::from_ref(&tag_t))
+            .await
+            .unwrap();
         assert_eq!(
             y_t.iter().map(|g| g.id.clone()).collect::<Vec<_>>(),
             vec![id4.clone()],
@@ -1428,11 +1552,18 @@ mod tests {
         s.create(c3).await.unwrap();
 
         // Empty tag filter ⇒ all three.
-        let all_ids: std::collections::HashSet<_> =
-            s.list(&[]).await.unwrap().iter().map(|c| c.id.clone()).collect();
+        let all_ids: std::collections::HashSet<_> = s
+            .list(&[])
+            .await
+            .unwrap()
+            .iter()
+            .map(|c| c.id.clone())
+            .collect();
         assert_eq!(
             all_ids,
-            [id1.clone(), id2.clone(), id3.clone()].into_iter().collect(),
+            [id1.clone(), id2.clone(), id3.clone()]
+                .into_iter()
+                .collect(),
             "empty tag filter must return every customer"
         );
 
@@ -1457,5 +1588,125 @@ mod tests {
 
         // Tag nobody carries ⇒ empty.
         assert!(s.list(&[tag_lonely]).await.unwrap().is_empty());
+    }
+
+    /// Regression: `InMemoryTagStore` must implement the `update`
+    /// method declared on the `TagStore` trait. Without it the
+    /// workspace fails to compile (`E0046: not all trait items
+    /// implemented`). The behaviour is the same partial-update
+    /// pattern used by the other in-memory stores: a missing field
+    /// in the params leaves the corresponding attribute untouched.
+    #[tokio::test]
+    async fn in_memory_tag_store_update_renames_tag() {
+        let s = InMemoryTagStore::new();
+        let original = Tag::new("old-name");
+        let id = original.id.clone();
+        s.create(original.clone()).await.unwrap();
+
+        // Partial update: only name is changed.
+        let updated = s
+            .update(
+                &id,
+                TagUpdateParams {
+                    name: Some("new-name".into()),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(updated.name, "new-name");
+        assert_eq!(updated.id, id, "update must preserve identity");
+
+        // Persisted state reflects the rename.
+        let loaded = s.read(&id).await.unwrap().expect("tag should still exist");
+        assert_eq!(loaded.name, "new-name");
+    }
+
+    /// Regression: \`InMemoryToolStore\` must implement the
+    /// \`update\` method declared on the \`ToolStore\` trait.
+    /// Without it the workspace fails to compile (\`E0046: not all
+    /// trait items implemented\`). Mirrors the partial-update
+    /// pattern used by the other in-memory stores.
+    #[tokio::test]
+    async fn in_memory_tool_store_update_renames_tool() {
+        let s = InMemoryToolStore::new();
+        let original = Tool {
+            id: ToolId::new(),
+            name: "orig".into(),
+            description: "d".into(),
+            parameters_schema: serde_json::json!({"type": "object"}),
+            kind: ToolKind::Local,
+            creation_utc: chrono::Utc::now(),
+        };
+        let id = original.id.clone();
+        s.create(original.clone()).await.unwrap();
+
+        let updated = s
+            .update(
+                &id,
+                ToolUpdateParams {
+                    name: Some("renamed".into()),
+                    description: Some("new desc".into()),
+                    parameters_schema: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(updated.name, "renamed");
+        assert_eq!(updated.description, "new desc");
+        // Unset fields stay untouched.
+        assert_eq!(updated.kind, ToolKind::Local);
+        assert_eq!(updated.id, id, "update must preserve identity");
+
+        // Persisted state reflects the change.
+        let loaded = s.read(&id).await.unwrap().expect("tool should still exist");
+        assert_eq!(loaded.name, "renamed");
+    }
+
+    /// Regression: \`ContextVariableStore::update\` must persist the
+    /// \`data\` field carried by \`ContextVariableUpdateParams\`.
+    /// The current implementation silently drops it (\`let _ = p.data\`).
+    /// The contract is: if a caller passes \`data: Some(payload)\`, that
+    /// payload should end up in the value store keyed by the variable's
+    /// own key. Reading the value back via \`upsert_value\` or any
+    /// higher-level read should return the new payload.
+    #[tokio::test]
+    async fn context_variable_update_persists_data_field() {
+        let s = InMemoryContextVariableStore::new();
+        let agent_id = AgentId::new();
+        let v = ContextVariable {
+            id: ContextVariableId::new(),
+            agent_id: agent_id.clone(),
+            key: "balance".into(),
+            freshness_rules: vec![],
+            tags: vec![],
+            creation_utc: chrono::Utc::now(),
+        };
+        let id = v.id.clone();
+        s.create(v).await.unwrap();
+
+        // Update with a new data payload.
+        let payload = serde_json::json!({"amount": 42, "currency": "USD"});
+        s.update(
+            &id,
+            ContextVariableUpdateParams {
+                key: None,
+                data: Some(payload.clone()),
+            },
+        )
+        .await
+        .expect("update with data should succeed");
+
+        // The payload must be readable via read_value keyed by the
+        // variable's own key.
+        let value = s
+            .read_value(&id, "balance")
+            .await
+            .unwrap()
+            .expect("update() should have persisted a value");
+        assert_eq!(
+            value.data, payload,
+            "update() must persist the data field on the value store"
+        );
     }
 }

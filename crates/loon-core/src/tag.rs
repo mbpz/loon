@@ -37,6 +37,13 @@ impl Tag {
     }
 }
 
+/// Partial-update params for `Tag`. Only `name` is mutable; other
+/// fields are immutable identity.
+#[derive(Debug, Default, Clone)]
+pub struct TagUpdateParams {
+    pub name: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

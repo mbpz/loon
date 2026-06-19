@@ -69,7 +69,9 @@ impl JsonFileMigrator {
         // Write back atomically.
         let tmp = tmp_path(path);
         let bytes = serde_json::to_vec_pretty(&current).map_err(PersistenceError::Json)?;
-        fs::write(&tmp, &bytes).await.map_err(PersistenceError::Io)?;
+        fs::write(&tmp, &bytes)
+            .await
+            .map_err(PersistenceError::Io)?;
         fs::rename(&tmp, path).await.map_err(PersistenceError::Io)?;
         Ok(())
     }
@@ -144,9 +146,7 @@ mod tests {
     async fn skips_non_json_files() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("doc.txt");
-        tokio::fs::write(&path, b"not json")
-            .await
-            .unwrap();
+        tokio::fs::write(&path, b"not json").await.unwrap();
         let plan = Arc::new(MigrationPlan::new(vec![Arc::new(AddField)]));
         let mig = JsonFileMigrator::new(plan);
         let n = mig.migrate_dir(dir.path()).await.unwrap();

@@ -64,7 +64,11 @@ impl Engine for AlphaEngine {
         let trace_id = context.session_id.0.clone();
 
         // on_acknowledging hook (before status emit)
-        let hctx = HookContext { point: "on_acknowledging", payload: None, error: None };
+        let hctx = HookContext {
+            point: "on_acknowledging",
+            payload: None,
+            error: None,
+        };
         if !self.hooks.run_chain(&self.hooks.on_acknowledging, &hctx)? {
             return Err(crate::error::EngineError::HookBail);
         }
@@ -82,7 +86,11 @@ impl Engine for AlphaEngine {
             .await;
 
         // on_acknowledged hook (after status emit)
-        let hctx = HookContext { point: "on_acknowledged", payload: None, error: None };
+        let hctx = HookContext {
+            point: "on_acknowledged",
+            payload: None,
+            error: None,
+        };
         if !self.hooks.run_chain(&self.hooks.on_acknowledged, &hctx)? {
             return Err(crate::error::EngineError::HookBail);
         }
@@ -111,7 +119,11 @@ impl Engine for AlphaEngine {
         .await?;
 
         // on_preparing hook (after agent+session load)
-        let hctx = HookContext { point: "on_preparing", payload: None, error: None };
+        let hctx = HookContext {
+            point: "on_preparing",
+            payload: None,
+            error: None,
+        };
         if !self.hooks.run_chain(&self.hooks.on_preparing, &hctx)? {
             return Err(crate::error::EngineError::HookBail);
         }
@@ -140,7 +152,10 @@ impl Engine for AlphaEngine {
                 payload: Some(&payload),
                 error: None,
             };
-            if !self.hooks.run_chain(&self.hooks.on_preparation_iteration_start, &hctx)? {
+            if !self
+                .hooks
+                .run_chain(&self.hooks.on_preparation_iteration_start, &hctx)?
+            {
                 return Err(crate::error::EngineError::HookBail);
             }
 
@@ -162,10 +177,7 @@ impl Engine for AlphaEngine {
                 .tool_caller
                 .generate_insights(&engine_ctx, &resolved)
                 .await?;
-            let executed = self
-                .tool_caller
-                .call_tools(&engine_ctx, &insights)
-                .await?;
+            let executed = self.tool_caller.call_tools(&engine_ctx, &insights).await?;
 
             // on_preparation_iteration_end hook
             let payload = serde_json::json!({
@@ -177,7 +189,10 @@ impl Engine for AlphaEngine {
                 payload: Some(&payload),
                 error: None,
             };
-            if !self.hooks.run_chain(&self.hooks.on_preparation_iteration_end, &hctx)? {
+            if !self
+                .hooks
+                .run_chain(&self.hooks.on_preparation_iteration_end, &hctx)?
+            {
                 return Err(crate::error::EngineError::HookBail);
             }
 
@@ -193,8 +208,15 @@ impl Engine for AlphaEngine {
         }
 
         // on_generating_messages hook (before LLM call)
-        let hctx = HookContext { point: "on_generating_messages", payload: None, error: None };
-        if !self.hooks.run_chain(&self.hooks.on_generating_messages, &hctx)? {
+        let hctx = HookContext {
+            point: "on_generating_messages",
+            payload: None,
+            error: None,
+        };
+        if !self
+            .hooks
+            .run_chain(&self.hooks.on_generating_messages, &hctx)?
+        {
             return Err(crate::error::EngineError::HookBail);
         }
 
@@ -219,7 +241,10 @@ impl Engine for AlphaEngine {
             payload: Some(&payload),
             error: None,
         };
-        if !self.hooks.run_chain(&self.hooks.on_message_generated, &hctx)? {
+        if !self
+            .hooks
+            .run_chain(&self.hooks.on_message_generated, &hctx)?
+        {
             return Err(crate::error::EngineError::HookBail);
         }
 
@@ -239,8 +264,15 @@ impl Engine for AlphaEngine {
         }
 
         // on_messages_emitted hook (after all messages emitted)
-        let hctx = HookContext { point: "on_messages_emitted", payload: None, error: None };
-        if !self.hooks.run_chain(&self.hooks.on_messages_emitted, &hctx)? {
+        let hctx = HookContext {
+            point: "on_messages_emitted",
+            payload: None,
+            error: None,
+        };
+        if !self
+            .hooks
+            .run_chain(&self.hooks.on_messages_emitted, &hctx)?
+        {
             return Err(crate::error::EngineError::HookBail);
         }
 
@@ -495,6 +527,13 @@ mod tests {
             _: loon_core::JsonValue,
         ) -> CoreResult<loon_core::ContextVariableValue> {
             Err(CoreError::Internal("n/a".into()))
+        }
+        async fn read_value(
+            &self,
+            _: &loon_core::ContextVariableId,
+            _: &str,
+        ) -> CoreResult<Option<loon_core::ContextVariableValue>> {
+            Ok(None)
         }
     }
 
@@ -1061,10 +1100,7 @@ mod tests {
             events: parking_lot::Mutex::new(Vec::new()),
         };
         let result = engine.process(&ctx, &emitter).await;
-        assert!(matches!(
-            result,
-            Err(crate::error::EngineError::HookBail)
-        ));
+        assert!(matches!(result, Err(crate::error::EngineError::HookBail)));
         // No events should have been emitted (bail before status emit)
         assert!(emitter.events.lock().is_empty());
     }
@@ -1086,10 +1122,7 @@ mod tests {
             events: parking_lot::Mutex::new(Vec::new()),
         };
         let result = engine.process(&ctx, &emitter).await;
-        assert!(matches!(
-            result,
-            Err(crate::error::EngineError::HookBail)
-        ));
+        assert!(matches!(result, Err(crate::error::EngineError::HookBail)));
     }
 
     /// Regression test for the public-availability of `NoopEmitter`.

@@ -388,7 +388,10 @@ mod integration_tests {
 
         match result {
             Err(PersistenceError::Serialization(_)) => {}
-            other => panic!("expected PersistenceError::Serialization, got {:?}", other.map(|_| "Ok(_)").map_err(|e| e.to_string())),
+            other => panic!(
+                "expected PersistenceError::Serialization, got {:?}",
+                other.map(|_| "Ok(_)").map_err(|e| e.to_string())
+            ),
         }
 
         // cache must still hold the original doc

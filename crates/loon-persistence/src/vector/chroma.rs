@@ -65,10 +65,7 @@ impl VectorDatabase for ChromaVectorDatabase {
         vector: Vec<f32>,
         metadata: Value,
     ) -> PersistenceResult<()> {
-        let url = format!(
-            "{}/api/v1/collections/{}/upsert",
-            self.base_url, collection
-        );
+        let url = format!("{}/api/v1/collections/{}/upsert", self.base_url, collection);
         let body = json!({
             "ids": [id],
             "embeddings": [vector],
@@ -97,10 +94,7 @@ impl VectorDatabase for ChromaVectorDatabase {
         query: Vec<f32>,
         top_k: usize,
     ) -> PersistenceResult<Vec<VectorHit>> {
-        let url = format!(
-            "{}/api/v1/collections/{}/query",
-            self.base_url, collection
-        );
+        let url = format!("{}/api/v1/collections/{}/query", self.base_url, collection);
         let body = json!({
             "query_embeddings": [query],
             "n_results": top_k,
@@ -141,11 +135,7 @@ impl ChromaQueryResponse {
             self.distances.as_ref().and_then(|d| d.first()),
             self.metadatas.as_ref().and_then(|m| m.first()),
         ) {
-            for ((id, dist), meta) in ids
-                .iter()
-                .zip(distances.iter())
-                .zip(metadatas.iter())
-            {
+            for ((id, dist), meta) in ids.iter().zip(distances.iter()).zip(metadatas.iter()) {
                 out.push(VectorHit {
                     id: id.clone(),
                     // Convert distance -> similarity (cosine distance in
@@ -193,10 +183,7 @@ mod tests {
             .mount(&server)
             .await;
         let db = ChromaVectorDatabase::new(server.uri());
-        let hits = db
-            .search("docs", vec![0.1, 0.2, 0.3], 2)
-            .await
-            .unwrap();
+        let hits = db.search("docs", vec![0.1, 0.2, 0.3], 2).await.unwrap();
         assert_eq!(hits.len(), 2);
         assert_eq!(hits[0].id, "a");
         assert!((hits[0].score - 0.9).abs() < 1e-6);

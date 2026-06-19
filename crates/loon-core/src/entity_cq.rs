@@ -149,8 +149,7 @@ impl EntityQueries {
         let journey_store: Arc<dyn JourneyStore> = Arc::new(InMemoryJourneyStore::new());
         let canned_response_store: Arc<dyn CannedResponseStore> =
             Arc::new(InMemoryCannedResponseStore::new());
-        let capability_store: Arc<dyn CapabilityStore> =
-            Arc::new(InMemoryCapabilityStore::new());
+        let capability_store: Arc<dyn CapabilityStore> = Arc::new(InMemoryCapabilityStore::new());
         let retriever_store: Arc<dyn RetrieverStore> = Arc::new(InMemoryRetrieverStore::new());
         let tool_store: Arc<dyn ToolStore> = Arc::new(InMemoryToolStore::new());
         let evaluation_store: Arc<dyn EvaluationStore> = Arc::new(InMemoryEvaluationStore::new());

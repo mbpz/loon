@@ -22,4 +22,12 @@ pub trait ContextVariableStore: Send + Sync {
         key: &str,
         data: JsonValue,
     ) -> CoreResult<ContextVariableValue>;
+
+    /// Read the value stored at \`(var_id, key)\`. Returns
+    /// \`None\` if no value has been upserted for that pair.
+    async fn read_value(
+        &self,
+        var_id: &ContextVariableId,
+        key: &str,
+    ) -> CoreResult<Option<ContextVariableValue>>;
 }

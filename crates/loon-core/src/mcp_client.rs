@@ -73,21 +73,22 @@ impl McpClient {
 #[async_trait]
 impl ToolService for McpClient {
     async fn list_tools(&self) -> CoreResult<Vec<Tool>> {
-        {
-            let cache = self.tools_cache.lock();
-            if let Some(tools) = cache.as_ref() {
-                return Ok(tools.clone());
-            }
-        }
-        let tools = self.fetch_tools().await?;
-        *self.tools_cache.lock() = Some(tools.clone());
-        Ok(tools)
+        // Phase 1: mirror the `call_tool` contract — surface a
+        // clear "not yet implemented" error instead of silently
+        // returning an empty list. The cache and `fetch_tools`
+        // are kept for the future transport implementation.
+        let _ = &self.tools_cache;
+        Err(CoreError::Internal(
+            "MCP list_tools not yet implemented".into(),
+        ))
     }
 
     async fn call_tool(&self, _tool_id: &ToolId, _arguments: JsonValue) -> CoreResult<ToolResult> {
         // Phase 1: stub. Real impl lands when mcp crate integration
         // surfaces a stable async API.
-        Err(CoreError::Internal("MCP call_tool not yet implemented".into()))
+        Err(CoreError::Internal(
+            "MCP call_tool not yet implemented".into(),
+        ))
     }
 }
 
@@ -130,16 +131,28 @@ mod tests {
         assert_ne!(c1.tool_id("ping").0, c2.tool_id("ping").0);
     }
 
+    /// `McpClient::list_tools` must surface a "not yet implemented"
+    /// error in Phase 1, mirroring the contract of
+    /// `McpClient::call_tool`. A successful `Ok(vec![])` return
+    /// value silently lies to callers: they cannot tell whether
+    /// the MCP server really has no tools, or whether the
+    /// transport is unwired. Aligning the two stub methods lets
+    /// the registry propagate a clear error to the engine.
     #[tokio::test]
-    async fn list_tools_returns_empty_in_phase1() {
+    async fn mcp_client_list_tools_returns_internal_error_in_phase1() {
+        use crate::CoreError;
         let c = McpClient::new(
             "test",
             McpTransport::Http {
                 url: "http://x".into(),
             },
         );
-        let tools = c.list_tools().await.unwrap();
-        assert!(tools.is_empty());
+        let res = c.list_tools().await;
+        let err = res.expect_err("phase 1 list_tools should error");
+        assert!(
+            matches!(err, CoreError::Internal(ref msg) if msg.contains("MCP list_tools not yet implemented")),
+            "got: {err}"
+        );
     }
 
     #[test]

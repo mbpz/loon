@@ -73,6 +73,26 @@ mod tests {
         async fn read(&self, id: &EvaluationId) -> CoreResult<Option<Observation>> {
             Ok(self.data.lock().get(id).cloned())
         }
+        async fn update(
+            &self,
+            id: &EvaluationId,
+            params: loon_core::ObservationUpdateParams,
+        ) -> CoreResult<Observation> {
+            let mut d = self.data.lock();
+            let o = d
+                .get_mut(id)
+                .ok_or_else(|| loon_core::CoreError::NotFound(loon_core::UniqueId(id.0.clone())))?;
+            if let Some(c) = params.condition {
+                o.condition = c;
+            }
+            if let Some(t) = params.tools {
+                o.tools = t;
+            }
+            if let Some(en) = params.enabled {
+                o.enabled = en;
+            }
+            Ok(o.clone())
+        }
         async fn delete(&self, id: &EvaluationId) -> CoreResult<()> {
             self.data.lock().remove(id);
             Ok(())

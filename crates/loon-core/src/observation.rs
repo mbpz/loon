@@ -25,6 +25,15 @@ impl Observation {
     }
 }
 
+/// Partial-update params for `Observation`. Mutable fields are
+/// `condition`, `tools`, and `enabled`; identity is immutable.
+#[derive(Debug, Default, Clone)]
+pub struct ObservationUpdateParams {
+    pub condition: Option<String>,
+    pub tools: Option<Vec<ToolId>>,
+    pub enabled: Option<bool>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

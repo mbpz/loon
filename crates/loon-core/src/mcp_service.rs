@@ -33,7 +33,12 @@ mod tests {
     use crate::{McpClient, McpTransport};
 
     #[tokio::test]
-    async fn adapter_delegates_to_client() {
+    async fn adapter_list_tools_propagates_phase1_error() {
+        // Adapter mirrors the underlying client's contract: in
+        // Phase 1 the MCP transport is unwired, so the adapter
+        // surfaces the same `MCP list_tools not yet implemented`
+        // error the client returns. The previous version asserted
+        // an empty list, which lied about transport state.
         let client = Arc::new(McpClient::new(
             "test",
             McpTransport::Http {
@@ -41,8 +46,15 @@ mod tests {
             },
         ));
         let adapter = McpToolServiceAdapter { client };
-        let tools = adapter.list_tools().await.unwrap();
-        assert!(tools.is_empty());
+        let err = adapter
+            .list_tools()
+            .await
+            .expect_err("phase 1 list_tools should error");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("MCP list_tools not yet implemented"),
+            "got: {msg}"
+        );
     }
 
     #[tokio::test]
@@ -54,10 +66,15 @@ mod tests {
             },
         ));
         let adapter = McpToolServiceAdapter { client };
-        let res = adapter.call_tool(&ToolId::new(), serde_json::json!({})).await;
+        let res = adapter
+            .call_tool(&ToolId::new(), serde_json::json!({}))
+            .await;
         let err = res.expect_err("phase 1 call_tool should error");
         let msg = err.to_string();
-        assert!(msg.contains("MCP call_tool not yet implemented"), "got: {msg}");
+        assert!(
+            msg.contains("MCP call_tool not yet implemented"),
+            "got: {msg}"
+        );
     }
 
     #[test]

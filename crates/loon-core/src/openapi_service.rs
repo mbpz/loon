@@ -148,9 +148,10 @@ impl OpenApiToolService {
             for (method, op) in methods {
                 if let Some(op) = op {
                     let id = self.tool_id(path, method, op);
-                    let name = op.operation_id.clone().unwrap_or_else(|| {
-                        format!("{}_{}", method, path.replace('/', "_"))
-                    });
+                    let name = op
+                        .operation_id
+                        .clone()
+                        .unwrap_or_else(|| format!("{}_{}", method, path.replace('/', "_")));
                     let description = op
                         .description
                         .clone()

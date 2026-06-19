@@ -123,11 +123,11 @@ impl MessageGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine_context::Interaction;
     use async_trait::async_trait;
     use loon_core::async_utils::BoxFuture;
     use loon_core::basic_tracer::BasicTracer;
     use loon_core::console_logger::ConsoleLogger;
-    use crate::engine_context::Interaction;
     use loon_core::{AgentId, Customer, Session, SessionId, StatusEventData, ToolEventData};
     use loon_emission::{
         EmissionResult, EmittedEvent, EventEmitter, MessageEmitData, MessageEventHandle,
@@ -285,7 +285,10 @@ mod tests {
     async fn message_generator_uses_schematic_generator() {
         use loon_nlp::test_utils::FakeNlpService;
         let nlp: Arc<dyn loon_nlp::NlpService> = Arc::new(FakeNlpService::new());
-        let prompt_builder = Arc::new(PromptBuilder::new(Arc::new(WsTok) as Arc<dyn Tokenizer>, 8000));
+        let prompt_builder = Arc::new(PromptBuilder::new(
+            Arc::new(WsTok) as Arc<dyn Tokenizer>,
+            8000,
+        ));
         let canned_gen = Arc::new(CannedResponseGenerator::new(nlp.clone()));
         let gen = MessageGenerator {
             nlp,

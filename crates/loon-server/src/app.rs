@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use axum::{routing::get, Router, middleware};
+use axum::{middleware, routing::get, Router};
 use loon_sdk::Server;
 
 use crate::auth::AuthProvider;
-use crate::middleware::rate_limit::{RateLimiter, rate_limit_middleware};
+use crate::middleware::rate_limit::{rate_limit_middleware, RateLimiter};
 
 /// State injected into every Axum handler via
 /// `axum::extract::State`.
@@ -139,7 +139,10 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .delete(crate::routes::canned_responses::delete_canned_response),
         )
         .route("/v1/sessions/{id}/chat", get(crate::routes::chat::chat_ws))
-        .route_layer(middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit_middleware,
+        ))
         .with_state(state)
 }
 

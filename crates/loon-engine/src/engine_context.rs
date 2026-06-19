@@ -275,10 +275,10 @@ impl loon_emission::EventEmitter for NoopEmitter {
     ) -> loon_emission::EmissionResult<loon_emission::MessageEventHandle> {
         use loon_core::async_utils::BoxFuture;
         let update: loon_emission::EventUpdater = std::sync::Arc::new(|_d| {
-            let fut: BoxFuture<'static, loon_emission::EmissionResult<loon_emission::MessageEventHandle>> =
-                Box::pin(async {
-                    Err(loon_emission::EmissionError::Serialization("noop".into()))
-                });
+            let fut: BoxFuture<
+                'static,
+                loon_emission::EmissionResult<loon_emission::MessageEventHandle>,
+            > = Box::pin(async { Err(loon_emission::EmissionError::Serialization("noop".into())) });
             fut
         });
         Ok(loon_emission::MessageEventHandle {
@@ -401,16 +401,10 @@ mod tests {
         let tracer: Arc<dyn Tracer> = Arc::new(BasicTracer::new());
         let emitter: Arc<dyn loon_emission::EventEmitter> = Arc::new(NoopEmitter);
 
-        let ctx = EngineContext::from_queries(
-            &queries,
-            info,
-            emitter.clone(),
-            emitter,
-            logger,
-            tracer,
-        )
-        .await
-        .unwrap();
+        let ctx =
+            EngineContext::from_queries(&queries, info, emitter.clone(), emitter, logger, tracer)
+                .await
+                .unwrap();
 
         assert_eq!(ctx.agent.name, "agent");
         assert_eq!(ctx.customer.name, "anonymous");

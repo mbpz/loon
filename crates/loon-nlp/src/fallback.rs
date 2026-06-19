@@ -88,8 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn fallback_picks_secondary_when_primary_fails() {
-        let primary: Box<dyn SchematicGenerator<TestS>> =
-            Box::new(AlwaysFailingSchematicGen);
+        let primary: Box<dyn SchematicGenerator<TestS>> = Box::new(AlwaysFailingSchematicGen);
         let secondary: Box<dyn SchematicGenerator<TestS>> = Box::new(SuccessSchematicGen);
         let gen = FallbackSchematicGenerator::<TestS>::new(primary, vec![secondary]);
         let r = gen
@@ -102,10 +101,8 @@ mod tests {
 
     #[tokio::test]
     async fn fallback_returns_error_when_all_exhausted() {
-        let primary: Box<dyn SchematicGenerator<TestS>> =
-            Box::new(AlwaysFailingSchematicGen);
-        let secondary: Box<dyn SchematicGenerator<TestS>> =
-            Box::new(AlwaysFailingSchematicGen);
+        let primary: Box<dyn SchematicGenerator<TestS>> = Box::new(AlwaysFailingSchematicGen);
+        let secondary: Box<dyn SchematicGenerator<TestS>> = Box::new(AlwaysFailingSchematicGen);
         let gen = FallbackSchematicGenerator::<TestS>::new(primary, vec![secondary]);
         let r = gen
             .generate("hello".into(), SchematicGenerationOptions::default())
@@ -115,8 +112,7 @@ mod tests {
 
     #[tokio::test]
     async fn fallback_returns_primary_error_when_no_fallbacks_configured() {
-        let primary: Box<dyn SchematicGenerator<TestS>> =
-            Box::new(AlwaysFailingSchematicGen);
+        let primary: Box<dyn SchematicGenerator<TestS>> = Box::new(AlwaysFailingSchematicGen);
         let gen = FallbackSchematicGenerator::<TestS>::new(primary, vec![]);
         let r = gen
             .generate("hello".into(), SchematicGenerationOptions::default())
@@ -126,8 +122,7 @@ mod tests {
 
     #[tokio::test]
     async fn fallback_skips_failing_first_fallback() {
-        let primary: Box<dyn SchematicGenerator<TestS>> =
-            Box::new(AlwaysFailingSchematicGen);
+        let primary: Box<dyn SchematicGenerator<TestS>> = Box::new(AlwaysFailingSchematicGen);
         let first_fallback: Box<dyn SchematicGenerator<TestS>> =
             Box::new(AlwaysFailingSchematicGen);
         let second_fallback: Box<dyn SchematicGenerator<TestS>> = Box::new(FixedGen("ok".into()));

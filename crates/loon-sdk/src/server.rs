@@ -175,7 +175,10 @@ impl ServerBuilder {
     /// Useful in tests where the caller wants to assemble the
     /// queries graph manually with fake stores, or for production
     /// code that wires its own database-backed stores.
-    pub fn with_entity_queries(mut self, queries: Arc<loon_core::entity_cq::EntityQueries>) -> Self {
+    pub fn with_entity_queries(
+        mut self,
+        queries: Arc<loon_core::entity_cq::EntityQueries>,
+    ) -> Self {
         self.entity_queries = Some(queries);
         self
     }
@@ -252,10 +255,7 @@ impl ServerBuilder {
             nlp,
         });
 
-        Ok(Server {
-            engine,
-            queries,
-        })
+        Ok(Server { engine, queries })
     }
 }
 
@@ -545,7 +545,10 @@ mod tests {
     /// signature compiles via a never-run closure.
     #[allow(dead_code)]
     fn _signature_check() {
-        fn _accepts_entity_queries(b: ServerBuilder, q: Arc<loon_core::entity_cq::EntityQueries>) -> ServerBuilder {
+        fn _accepts_entity_queries(
+            b: ServerBuilder,
+            q: Arc<loon_core::entity_cq::EntityQueries>,
+        ) -> ServerBuilder {
             b.with_entity_queries(q)
         }
     }

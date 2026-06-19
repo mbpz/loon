@@ -15,32 +15,55 @@ pub trait AuthProvider: Send + Sync {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthContext { pub principal: String }
+pub struct AuthContext {
+    pub principal: String,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
-    #[error("missing or invalid Authorization header")] Unauthorized,
-    #[error("internal auth error: {0}")] Internal(String),
+    #[error("missing or invalid Authorization header")]
+    Unauthorized,
+    #[error("internal auth error: {0}")]
+    Internal(String),
 }
 
 pub struct NoopAuthProvider;
 #[async_trait]
 impl AuthProvider for NoopAuthProvider {
     async fn authenticate(&self, _headers: &HeaderMap) -> Result<AuthContext, AuthError> {
-        Ok(AuthContext { principal: "anonymous".into() })
+        Ok(AuthContext {
+            principal: "anonymous".into(),
+        })
     }
 }
 
-pub struct BearerTokenAuthProvider { pub tokens: HashSet<String> }
+pub struct BearerTokenAuthProvider {
+    pub tokens: HashSet<String>,
+}
 impl BearerTokenAuthProvider {
-    pub fn new(tokens: Vec<String>) -> Self { Self { tokens: tokens.into_iter().collect() } }
+    pub fn new(tokens: Vec<String>) -> Self {
+        Self {
+            tokens: tokens.into_iter().collect(),
+        }
+    }
 }
 #[async_trait]
 impl AuthProvider for BearerTokenAuthProvider {
     async fn authenticate(&self, headers: &HeaderMap) -> Result<AuthContext, AuthError> {
-        let auth = headers.get("authorization").and_then(|h| h.to_str().ok()).ok_or(AuthError::Unauthorized)?;
-        let token = auth.strip_prefix("Bearer ").ok_or(AuthError::Unauthorized)?;
-        if self.tokens.contains(token) { Ok(AuthContext { principal: "bearer".into() }) } else { Err(AuthError::Unauthorized) }
+        let auth = headers
+            .get("authorization")
+            .and_then(|h| h.to_str().ok())
+            .ok_or(AuthError::Unauthorized)?;
+        let token = auth
+            .strip_prefix("Bearer ")
+            .ok_or(AuthError::Unauthorized)?;
+        if self.tokens.contains(token) {
+            Ok(AuthContext {
+                principal: "bearer".into(),
+            })
+        } else {
+            Err(AuthError::Unauthorized)
+        }
     }
 }
 

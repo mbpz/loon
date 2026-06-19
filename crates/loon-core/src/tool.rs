@@ -20,6 +20,16 @@ pub struct Tool {
     pub creation_utc: DateTime<Utc>,
 }
 
+/// Partial-update params for `Tool`. Mutable fields are `name`,
+/// `description`, and `parameters_schema`; `id`, `kind`, and
+/// `creation_utc` are immutable.
+#[derive(Debug, Default, Clone)]
+pub struct ToolUpdateParams {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub parameters_schema: Option<JsonValue>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ToolResult {
     pub data: JsonValue,

@@ -2,26 +2,36 @@
 //! existing `Tracer` trait through the `tracing` crate and exposes
 //! span-based timing via `tracing::span!` macros.
 
-use std::sync::Arc;
-use crate::tracer::Tracer as LoonTracer;
 use crate::common::JsonValue;
+use crate::tracer::Tracer as LoonTracer;
+use std::sync::Arc;
 
 /// `tracing` Span that bridges to the Loon `Tracer` trait.
 /// Phase 1: a thin wrapper that records span name + duration to
 /// the inner tracer's properties.
-pub struct OtelTracer { pub inner: Arc<dyn LoonTracer> }
+pub struct OtelTracer {
+    pub inner: Arc<dyn LoonTracer>,
+}
 
 impl OtelTracer {
-    pub fn new(inner: Arc<dyn LoonTracer>) -> Self { Self { inner } }
+    pub fn new(inner: Arc<dyn LoonTracer>) -> Self {
+        Self { inner }
+    }
 
     pub async fn in_span<F, Fut, T>(&self, name: &str, f: F) -> T
-    where F: FnOnce() -> Fut, Fut: std::future::Future<Output = T>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = T>,
     {
         let start = std::time::Instant::now();
-        self.inner.set_property("span.name", JsonValue::String(name.to_string()));
+        self.inner
+            .set_property("span.name", JsonValue::String(name.to_string()));
         let result = f().await;
         let elapsed = start.elapsed().as_millis() as u64;
-        self.inner.set_property(&format!("span.{name}.duration_ms"), JsonValue::Number(serde_json::Number::from(elapsed)));
+        self.inner.set_property(
+            &format!("span.{name}.duration_ms"),
+            JsonValue::Number(serde_json::Number::from(elapsed)),
+        );
         result
     }
 }
@@ -29,8 +39,8 @@ impl OtelTracer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tracer::Tracer;
     use crate::basic_tracer::BasicTracer;
+    use crate::tracer::Tracer;
 
     #[tokio::test]
     async fn in_span_records_duration() {

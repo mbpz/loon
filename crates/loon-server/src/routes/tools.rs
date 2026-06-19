@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
+    Json,
 };
 use serde::Deserialize;
 
@@ -92,22 +92,40 @@ pub async fn read_tool(
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateToolRequest {
-    #[serde(default)]
-    pub _unused: Option<String>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub parameters_schema: Option<serde_json::Value>,
 }
 
-/// `ToolStore` does not currently expose `update`, so the route
-/// returns 400 to make the limitation visible to clients. Once the
-/// store grows an `update` method this route can be filled in.
 pub async fn update_tool(
-    Path(_id): Path<String>,
-    State(_s): State<Arc<AppState>>,
-    Json(_req): Json<UpdateToolRequest>,
+    Path(id): Path<String>,
+    State(s): State<Arc<AppState>>,
+    Json(req): Json<UpdateToolRequest>,
 ) -> Result<Json<ApiResponse<Tool>>, ApiError> {
-    Err(ApiError::InvalidArgument(
-        "tools do not support update".into(),
-        "TOOL_UPDATE_NOT_SUPPORTED".into(),
-    ))
+    let tid = ToolId(id);
+    let updated = s
+        .server
+        .queries
+        .tool_store
+        .update(
+            &tid,
+            loon_core::ToolUpdateParams {
+                name: req.name,
+                description: req.description,
+                parameters_schema: req.parameters_schema,
+            },
+        )
+        .await
+        .map_err(|e| match e {
+            loon_core::CoreError::NotFound(uid) => {
+                ApiError::NotFound(format!("tool {}", uid.0), "TOOL_NOT_FOUND".into())
+            }
+            other => ApiError::Internal(other.to_string()),
+        })?;
+    Ok(Json(ApiResponse {
+        data: updated,
+        meta: None,
+    }))
 }
 
 pub async fn delete_tool(
@@ -162,14 +180,19 @@ mod tests {
             .expect("read ok");
         assert_eq!(read.data.name, "echo");
 
-        // update is not supported by ToolStore — must surface as 400.
+        // update now supported by ToolStore.
         let upd = update_tool(
             Path(id.clone()),
             State(state.clone()),
-            Json(UpdateToolRequest { _unused: None }),
+            Json(UpdateToolRequest {
+                name: Some("renamed".into()),
+                description: None,
+                parameters_schema: None,
+            }),
         )
-        .await;
-        assert!(matches!(upd, Err(ApiError::InvalidArgument(_, _))));
+        .await
+        .expect("update");
+        assert_eq!(upd.0.data.name, "renamed");
 
         let status = delete_tool(Path(id.clone()), State(state.clone()))
             .await

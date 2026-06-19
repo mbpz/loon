@@ -149,7 +149,10 @@ mod tests {
         "#;
         let c: Config = toml::from_str(toml_str).expect("parse");
         match c.persistence.backend {
-            PersistenceBackendConfig::Mongo { ref uri, ref database } => {
+            PersistenceBackendConfig::Mongo {
+                ref uri,
+                ref database,
+            } => {
                 assert_eq!(uri, "mongodb://localhost:27017");
                 assert_eq!(database, "loon");
             }

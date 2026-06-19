@@ -43,28 +43,50 @@ pub async fn run() -> anyhow::Result<()> {
     );
 
     let server = match &config.persistence.backend {
-        loon_persistence::PersistenceBackendConfig::JsonFile { root, flush_interval_ms } => {
-            let db = Arc::new(loon_persistence::backends::json_file::JsonFileDocumentDatabase::new(
-                std::path::Path::new(root),
-                Duration::from_millis(*flush_interval_ms),
-            )?);
+        loon_persistence::PersistenceBackendConfig::JsonFile {
+            root,
+            flush_interval_ms,
+        } => {
+            let db = Arc::new(
+                loon_persistence::backends::json_file::JsonFileDocumentDatabase::new(
+                    std::path::Path::new(root),
+                    Duration::from_millis(*flush_interval_ms),
+                )?,
+            );
             // Phase 9 startup hook (stub): construct the migration helper but
             // don't actually run a plan because no migrations are registered
             // yet. Once a `MigrationPlan` exists, this is where `enter()` and
             // `JsonFileMigrator` would be wired in.
-            let _migration_helper = loon_persistence::migration::DocumentStoreMigrationHelper::from_database(db.clone());
+            let _migration_helper =
+                loon_persistence::migration::DocumentStoreMigrationHelper::from_database(
+                    db.clone(),
+                );
             if let Err(e) = _migration_helper.ping().await {
                 tracing::warn!("migration helper ping failed: {e}");
             }
-            loon_sdk::Server::builder().with_document_db(db).with_nlp_service(nlp.clone()).build().await?
+            loon_sdk::Server::builder()
+                .with_document_db(db)
+                .with_nlp_service(nlp.clone())
+                .build()
+                .await?
         }
         loon_persistence::PersistenceBackendConfig::Mongo { uri, database } => {
-            let db = Arc::new(loon_persistence::backends::mongodb::MongoDocumentDatabase::connect(uri, database).await?);
-            let _migration_helper = loon_persistence::migration::DocumentStoreMigrationHelper::from_database(db.clone());
+            let db = Arc::new(
+                loon_persistence::backends::mongodb::MongoDocumentDatabase::connect(uri, database)
+                    .await?,
+            );
+            let _migration_helper =
+                loon_persistence::migration::DocumentStoreMigrationHelper::from_database(
+                    db.clone(),
+                );
             if let Err(e) = _migration_helper.ping().await {
                 tracing::warn!("migration helper ping failed: {e}");
             }
-            loon_sdk::Server::builder().with_document_db(db).with_nlp_service(nlp.clone()).build().await?
+            loon_sdk::Server::builder()
+                .with_document_db(db)
+                .with_nlp_service(nlp.clone())
+                .build()
+                .await?
         }
     };
     let app_state = std::sync::Arc::new(crate::app::AppState {
@@ -97,8 +119,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let helper =
-            loon_persistence::migration::DocumentStoreMigrationHelper::from_database(db);
+        let helper = loon_persistence::migration::DocumentStoreMigrationHelper::from_database(db);
         assert!(!helper.allow_migration);
         assert!(helper.plan.is_none());
     }

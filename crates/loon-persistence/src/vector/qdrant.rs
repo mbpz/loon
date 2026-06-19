@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use qdrant_client::qdrant::point_id::PointIdOptions;
 use qdrant_client::qdrant::{
-    vectors_config, CreateCollection, Distance, PointId, PointStruct, SearchPoints,
-    UpsertPoints, Value, VectorParams, Vectors, VectorsConfig,
+    vectors_config, CreateCollection, Distance, PointId, PointStruct, SearchPoints, UpsertPoints,
+    Value, VectorParams, Vectors, VectorsConfig,
 };
 use qdrant_client::Qdrant;
 use serde_json::Value as JsonValue;
@@ -52,12 +52,9 @@ impl QdrantVectorDatabase {
                     vectors_config: Some(vectors_config),
                     ..Default::default()
                 };
-                self.client
-                    .create_collection(req)
-                    .await
-                    .map_err(|e| {
-                        PersistenceError::Internal(format!("qdrant create_collection: {e}"))
-                    })?;
+                self.client.create_collection(req).await.map_err(|e| {
+                    PersistenceError::Internal(format!("qdrant create_collection: {e}"))
+                })?;
                 Ok(())
             }
             Err(e) => Err(PersistenceError::Internal(format!(
@@ -71,9 +68,10 @@ fn json_to_qdrant(v: JsonValue) -> Option<Value> {
     match v {
         JsonValue::Null => None,
         JsonValue::Bool(b) => Some(Value::from(b)),
-        JsonValue::Number(n) => {
-            n.as_i64().map(Value::from).or_else(|| n.as_f64().map(Value::from))
-        }
+        JsonValue::Number(n) => n
+            .as_i64()
+            .map(Value::from)
+            .or_else(|| n.as_f64().map(Value::from)),
         JsonValue::String(s) => Some(Value::from(s)),
         // Nested structures are not supported by the simple scalar
         // Qdrant `Value` type, so we drop them silently — callers
@@ -91,7 +89,8 @@ impl VectorDatabase for QdrantVectorDatabase {
         vector: Vec<f32>,
         metadata: JsonValue,
     ) -> PersistenceResult<()> {
-        self.ensure_collection(collection, vector.len() as u64).await?;
+        self.ensure_collection(collection, vector.len() as u64)
+            .await?;
         let payload: HashMap<String, Value> = metadata
             .as_object()
             .map(|o| {
@@ -140,15 +139,14 @@ impl VectorDatabase for QdrantVectorDatabase {
             .result
             .into_iter()
             .map(|p| {
-                let id = p
-                    .id
-                    .as_ref()
-                    .and_then(|i| match &i.point_id_options {
-                        Some(PointIdOptions::Num(n)) => Some(n.to_string()),
-                        Some(PointIdOptions::Uuid(s)) => Some(s.clone()),
-                        None => None,
-                    })
-                    .unwrap_or_default();
+                let id =
+                    p.id.as_ref()
+                        .and_then(|i| match &i.point_id_options {
+                            Some(PointIdOptions::Num(n)) => Some(n.to_string()),
+                            Some(PointIdOptions::Uuid(s)) => Some(s.clone()),
+                            None => None,
+                        })
+                        .unwrap_or_default();
                 let metadata = serde_json::to_value(&p.payload).unwrap_or(JsonValue::Null);
                 VectorHit {
                     id,

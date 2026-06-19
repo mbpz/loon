@@ -118,7 +118,8 @@ impl PromptBuilder {
 
         // 8. Canned responses
         if !canned_responses.is_empty() {
-            let mut s = String::from("Available canned responses (prefer these when applicable):\n");
+            let mut s =
+                String::from("Available canned responses (prefer these when applicable):\n");
             for cr in canned_responses {
                 s.push_str(&format!("  - {}\n", cr.value));
             }
@@ -153,11 +154,7 @@ impl PromptBuilder {
         // conversation history first).
         let tokens = self.tokenizer.count_tokens(&prompt).await.unwrap_or(0);
         if (tokens as usize) > self.max_tokens {
-            tracing::warn!(
-                "prompt over token budget: {} > {}",
-                tokens,
-                self.max_tokens
-            );
+            tracing::warn!("prompt over token budget: {} > {}", tokens, self.max_tokens);
         }
 
         Ok(prompt)
@@ -337,7 +334,10 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(p.contains("Domain glossary"), "missing glossary header: {p}");
+        assert!(
+            p.contains("Domain glossary"),
+            "missing glossary header: {p}"
+        );
         assert!(p.contains("MRR"), "missing term name: {p}");
         assert!(
             p.contains("monthly recurring revenue"),
@@ -352,17 +352,7 @@ mod tests {
             mk_message_event(EventSource::AiAgent, "Sure, I can help"),
         ]);
         let p = pb()
-            .build_prompt(
-                &agent(),
-                &interaction,
-                &[],
-                &[],
-                &[],
-                &[],
-                None,
-                &[],
-                &[],
-            )
+            .build_prompt(&agent(), &interaction, &[], &[], &[], &[], None, &[], &[])
             .await
             .unwrap();
         assert!(

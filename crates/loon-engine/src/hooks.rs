@@ -25,8 +25,7 @@ pub enum EngineHookResult {
 /// a `HookContext` carrying the hook point name, an optional
 /// structured payload, and an optional error reference. Async hooks
 /// can be added in a follow-up phase.
-pub type EngineHook =
-    Arc<dyn Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync>;
+pub type EngineHook = Arc<dyn Fn(&HookContext) -> EngineResult<EngineHookResult> + Send + Sync>;
 
 /// Context passed to hooks. Lightweight — references the names of
 /// the hook point and any structured payload the engine attached.
@@ -61,11 +60,7 @@ impl EngineHooks {
     /// continue (no hooks, all returned `CallNext`, or one returned
     /// `Resolve`); returns `Ok(false)` if any hook returned `Bail`,
     /// signalling the caller to abort the pipeline.
-    pub fn run_chain(
-        &self,
-        chain: &[EngineHook],
-        ctx: &HookContext,
-    ) -> EngineResult<bool> {
+    pub fn run_chain(&self, chain: &[EngineHook], ctx: &HookContext) -> EngineResult<bool> {
         for hook in chain {
             match hook(ctx)? {
                 EngineHookResult::CallNext => continue,
@@ -253,7 +248,11 @@ mod tests {
             c1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok(EngineHookResult::CallNext)
         });
-        let ctx = HookContext { point: "test", payload: None, error: None };
+        let ctx = HookContext {
+            point: "test",
+            payload: None,
+            error: None,
+        };
         assert!(hooks.run_chain(&hooks.on_acknowledging, &ctx).unwrap());
         assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 1);
     }

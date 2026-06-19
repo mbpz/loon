@@ -8,9 +8,9 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
+    Json,
 };
 use serde::Deserialize;
 
@@ -68,7 +68,10 @@ pub async fn read_relationship(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| {
-            ApiError::NotFound(format!("relationship {id}"), "RELATIONSHIP_NOT_FOUND".into())
+            ApiError::NotFound(
+                format!("relationship {id}"),
+                "RELATIONSHIP_NOT_FOUND".into(),
+            )
         })?;
     Ok(Json(ApiResponse {
         data: r,

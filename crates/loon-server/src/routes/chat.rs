@@ -45,7 +45,10 @@ impl OutgoingFrame {
     pub fn to_wire_json(&self) -> String {
         match self {
             OutgoingFrame::AgentMessage(delta) => {
-                format!(r#"{{"type":"agent_message","delta":{}}}"#, serde_json::Value::String(delta.clone()))
+                format!(
+                    r#"{{"type":"agent_message","delta":{}}}"#,
+                    serde_json::Value::String(delta.clone())
+                )
             }
             OutgoingFrame::Done => r#"{"type":"done"}"#.to_string(),
         }

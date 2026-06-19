@@ -6,9 +6,9 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
     extract::{Path, State},
     http::StatusCode,
+    Json,
 };
 use serde::Deserialize;
 
@@ -77,19 +77,31 @@ pub async fn read_tag(
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateTagRequest {
-    #[serde(default)]
-    pub _unused: Option<String>,
+    pub name: Option<String>,
 }
 
 pub async fn update_tag(
-    Path(_id): Path<String>,
-    State(_s): State<Arc<AppState>>,
-    Json(_req): Json<UpdateTagRequest>,
+    Path(id): Path<String>,
+    State(s): State<Arc<AppState>>,
+    Json(req): Json<UpdateTagRequest>,
 ) -> Result<Json<ApiResponse<Tag>>, ApiError> {
-    Err(ApiError::InvalidArgument(
-        "tags do not support update".into(),
-        "TAG_UPDATE_NOT_SUPPORTED".into(),
-    ))
+    let tid = TagId(id);
+    let updated = s
+        .server
+        .queries
+        .tag_store
+        .update(&tid, loon_core::TagUpdateParams { name: req.name })
+        .await
+        .map_err(|e| match e {
+            loon_core::CoreError::NotFound(uid) => {
+                ApiError::NotFound(format!("tag {}", uid.0), "TAG_NOT_FOUND".into())
+            }
+            other => ApiError::Internal(other.to_string()),
+        })?;
+    Ok(Json(ApiResponse {
+        data: updated,
+        meta: None,
+    }))
 }
 
 pub async fn delete_tag(
@@ -130,9 +142,7 @@ mod tests {
 
         let created = create_tag(
             State(state.clone()),
-            Json(CreateTagRequest {
-                name: "vip".into(),
-            }),
+            Json(CreateTagRequest { name: "vip".into() }),
         )
         .await
         .expect("create ok");
@@ -149,10 +159,13 @@ mod tests {
         let upd = update_tag(
             Path(id.clone()),
             State(state.clone()),
-            Json(UpdateTagRequest { _unused: None }),
+            Json(UpdateTagRequest {
+                name: Some("renamed".into()),
+            }),
         )
-        .await;
-        assert!(matches!(upd, Err(ApiError::InvalidArgument(_, _))));
+        .await
+        .expect("update");
+        assert_eq!(upd.0.data.name, "renamed");
 
         let status = delete_tag(Path(id.clone()), State(state.clone()))
             .await

@@ -7,9 +7,9 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
+    Json,
 };
 use serde::Deserialize;
 
@@ -83,10 +83,7 @@ pub async fn read_observation(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?
         .ok_or_else(|| {
-            ApiError::NotFound(
-                format!("observation {id}"),
-                "OBSERVATION_NOT_FOUND".into(),
-            )
+            ApiError::NotFound(format!("observation {id}"), "OBSERVATION_NOT_FOUND".into())
         })?;
     Ok(Json(ApiResponse {
         data: o,
@@ -96,19 +93,44 @@ pub async fn read_observation(
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateObservationRequest {
-    #[serde(default)]
-    pub _unused: Option<String>,
+    pub condition: Option<String>,
+    pub tools: Option<Vec<String>>,
+    pub enabled: Option<bool>,
 }
 
 pub async fn update_observation(
-    Path(_id): Path<String>,
-    State(_s): State<Arc<AppState>>,
-    Json(_req): Json<UpdateObservationRequest>,
+    Path(id): Path<String>,
+    State(s): State<Arc<AppState>>,
+    Json(req): Json<UpdateObservationRequest>,
 ) -> Result<Json<ApiResponse<Observation>>, ApiError> {
-    Err(ApiError::InvalidArgument(
-        "observations do not support update".into(),
-        "OBSERVATION_UPDATE_NOT_SUPPORTED".into(),
-    ))
+    let eid = loon_core::EvaluationId(id);
+    let tools = req
+        .tools
+        .map(|ts| ts.into_iter().map(loon_core::ToolId).collect());
+    let updated = s
+        .server
+        .queries
+        .evaluation_store
+        .update(
+            &eid,
+            loon_core::ObservationUpdateParams {
+                condition: req.condition,
+                tools,
+                enabled: req.enabled,
+            },
+        )
+        .await
+        .map_err(|e| match e {
+            loon_core::CoreError::NotFound(uid) => ApiError::NotFound(
+                format!("observation {}", uid.0),
+                "OBSERVATION_NOT_FOUND".into(),
+            ),
+            other => ApiError::Internal(other.to_string()),
+        })?;
+    Ok(Json(ApiResponse {
+        data: updated,
+        meta: None,
+    }))
 }
 
 pub async fn delete_observation(
@@ -168,10 +190,16 @@ mod tests {
         let upd = update_observation(
             Path(id.clone()),
             State(state.clone()),
-            Json(UpdateObservationRequest { _unused: None }),
+            Json(UpdateObservationRequest {
+                condition: Some("updated".into()),
+                tools: None,
+                enabled: Some(false),
+            }),
         )
-        .await;
-        assert!(matches!(upd, Err(ApiError::InvalidArgument(_, _))));
+        .await
+        .expect("update");
+        assert_eq!(upd.0.data.condition, "updated");
+        assert!(!upd.0.data.enabled);
 
         let status = delete_observation(Path(id.clone()), State(state.clone()))
             .await

@@ -92,8 +92,8 @@ impl<T: Document + 'static> DocumentCollection<T> for MongoDocumentCollection<T>
     async fn insert_one(&self, document: T) -> PersistenceResult<InsertResult> {
         let id = serde_json::to_string(document.id())?;
         let value = serde_json::to_value(&document)?;
-        let bson_doc =
-            bson::to_document(&value).map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        let bson_doc = bson::to_document(&value)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
         self.collection
             .insert_one(bson_doc)
             .await
