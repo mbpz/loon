@@ -89,9 +89,28 @@ pub async fn run() -> anyhow::Result<()> {
                 .await?
         }
     };
+    // Auth provider: if LOON_AUTH_TOKENS is set (comma-separated),
+    // use BearerTokenAuthProvider; otherwise NoopAuthProvider.
+    let auth: std::sync::Arc<dyn crate::auth::AuthProvider> =
+        match std::env::var("LOON_AUTH_TOKENS") {
+            Ok(tokens) if !tokens.is_empty() => {
+                let token_list: Vec<String> =
+                    tokens.split(',').map(|s| s.trim().to_string()).collect();
+                tracing::info!(
+                    "Bearer token auth enabled with {} token(s)",
+                    token_list.len()
+                );
+                std::sync::Arc::new(crate::auth::BearerTokenAuthProvider::new(token_list))
+            }
+            _ => {
+                tracing::info!("No auth configured (LOON_AUTH_TOKENS not set); using NoopAuthProvider");
+                std::sync::Arc::new(crate::auth::NoopAuthProvider)
+            }
+        };
+
     let app_state = std::sync::Arc::new(crate::app::AppState {
         server: std::sync::Arc::new(server),
-        auth: std::sync::Arc::new(crate::auth::NoopAuthProvider),
+        auth,
         rate_limiter: std::sync::Arc::new(crate::middleware::rate_limit::RateLimiter::new(
             crate::middleware::rate_limit::RateLimitConfig::default(),
         )),

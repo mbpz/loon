@@ -143,6 +143,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             state.clone(),
             rate_limit_middleware,
         ))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            crate::middleware::auth::auth_middleware,
+        ))
         .with_state(state)
 }
 
