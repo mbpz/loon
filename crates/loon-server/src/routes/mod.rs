@@ -3,6 +3,7 @@
 pub mod agents;
 pub mod canned_responses;
 pub mod chat;
+pub mod context_variables;
 pub mod customers;
 pub mod glossary;
 pub mod guidelines;

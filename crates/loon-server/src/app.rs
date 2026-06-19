@@ -128,6 +128,17 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .delete(crate::routes::glossary::delete_glossary),
         )
         .route(
+            "/v1/context_variables",
+            get(crate::routes::context_variables::list_context_variables)
+                .post(crate::routes::context_variables::create_context_variable),
+        )
+        .route(
+            "/v1/context_variables/{id}",
+            get(crate::routes::context_variables::read_context_variable)
+                .patch(crate::routes::context_variables::update_context_variable)
+                .delete(crate::routes::context_variables::delete_context_variable),
+        )
+        .route(
             "/v1/canned_responses",
             get(crate::routes::canned_responses::list_canned_responses)
                 .post(crate::routes::canned_responses::create_canned_response),
