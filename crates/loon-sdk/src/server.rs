@@ -300,14 +300,51 @@ impl Server {
     }
 
     /// Process a single user message and return a textual reply.
-    /// Phase 1 returns a fixed greeting; real implementation will
-    /// route through the engine.
+    ///
+    /// Routes the request through the configured [`Engine`]:
+    /// the supplied session identifies the agent, the engine emits
+    /// events into a local `EventBuffer`, and the joined
+    /// `message` events are returned. If the engine emits no
+    /// message events, the result is an empty string (the caller
+    /// can treat this as "engine produced no reply"). This
+    /// replaces the Phase-1 placeholder literal.
     pub async fn process_message(
         &self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
         _user_message: &str,
     ) -> SdkResult<String> {
-        Ok("Hello from loon SDK".into())
+        let session = self
+            .queries
+            .session_store
+            .read(session_id)
+            .await
+            .map_err(|_e| crate::error::SdkError::SessionNotFound(session_id.clone()))?
+            .ok_or_else(|| crate::error::SdkError::SessionNotFound(session_id.clone()))?;
+        let agent = self
+            .queries
+            .agent_store
+            .read(&session.agent_id)
+            .await
+            .map_err(|_e| crate::error::SdkError::AgentNotFound(session.agent_id.clone()))?
+            .ok_or_else(|| crate::error::SdkError::AgentNotFound(session.agent_id.clone()))?;
+        let buffer = loon_emission::EventBuffer::new(agent);
+        let ctx = loon_engine::engine_context::Context {
+            session_id: session_id.clone(),
+            agent_id: session.agent_id.clone(),
+        };
+        let _handled = self.engine.process(&ctx, &buffer).await.map_err(|e| {
+            crate::error::SdkError::Other(Box::new(std::io::Error::other(e.to_string())))
+        })?;
+        let mut out = String::new();
+        for ev in buffer.events() {
+            if let Some(msg) = ev.data.get("message").and_then(|v| v.as_str()) {
+                if !out.is_empty() {
+                    out.push('\n');
+                }
+                out.push_str(msg);
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -318,7 +355,6 @@ fn _assert_dyn_engine(_: &dyn Engine) {}
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use loon_core::SessionId;
     use loon_nlp::test_utils::FakeNlpService;
     use loon_persistence::backends::json_file::JsonFileDocumentDatabase;
     use std::time::Duration;
@@ -332,13 +368,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn process_message_returns_greeting() {
-        let server = Server::builder().build().await.expect("build ok");
+    async fn process_message_routes_through_engine_and_returns_engine_output() {
+        // Build a server with a known agent + session, then send
+        // a user message. The reply must come from the engine
+        // pipeline, not from a hard-coded literal. With the
+        // `FakeNlpService` the engine emits an empty
+        // `FluidOutput::reply`, so the only thing we can pin down
+        // reliably is the negative assertion: the reply is NOT
+        // the Phase-1 placeholder `"Hello from loon SDK"`.
+        use loon_core::entity_cq::EntityQueries;
+        use loon_core::{Agent, Session};
+
+        let queries = EntityQueries::in_memory();
+        let agent = Agent::new("a", "b");
+        let agent_id = agent.id.clone();
+        queries.agent_store.create(agent).await.unwrap();
+        let session = Session::new(&agent_id);
+        let session_id = session.id.clone();
+        queries.session_store.create(session).await.unwrap();
+
+        let server = Server::builder()
+            .with_entity_queries(queries)
+            .build()
+            .await
+            .expect("build ok");
         let reply = server
-            .process_message(&SessionId::new(), "hi")
+            .process_message(&session_id, "hi")
             .await
             .expect("process ok");
-        assert_eq!(reply, "Hello from loon SDK");
+
+        assert_ne!(
+            reply, "Hello from loon SDK",
+            "process_message must not return the Phase-1 placeholder literal"
+        );
     }
 
     #[tokio::test]

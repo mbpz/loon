@@ -1,4 +1,4 @@
-use crate::error::PersistenceResult;
+use crate::error::{PersistenceError, PersistenceResult};
 use crate::{
     BaseDocument, DeleteResult, Document, DocumentCollection, DocumentDatabase,
     DocumentDatabaseHandle, DocumentFilter, DocumentLoader, DocumentUpdate, InsertResult,
@@ -135,14 +135,14 @@ impl<T: Document + 'static> DocumentCollection<T> for JsonFileCollection<T> {
                 matched += 1;
                 let mut value = serde_json::to_value(&*v)?;
                 if apply_update(&mut value, &update) {
-                    if let Ok(new_doc) = serde_json::from_value::<T>(value) {
-                        *v = new_doc;
-                        modified += 1;
-                        let key = v.id().to_string();
-                        let path = self.dir.join(format!("{}.json", sanitize(&key)));
-                        let bytes = serde_json::to_vec(&*v)?;
-                        atomic_write(&path, &bytes)?;
-                    }
+                    let new_doc = serde_json::from_value::<T>(value)
+                        .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+                    *v = new_doc;
+                    modified += 1;
+                    let key = v.id().to_string();
+                    let path = self.dir.join(format!("{}.json", sanitize(&key)));
+                    let bytes = serde_json::to_vec(&*v)?;
+                    atomic_write(&path, &bytes)?;
                 }
             }
         }
@@ -262,6 +262,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> PersistenceResult<()> {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
+    use crate::error::PersistenceError;
     use crate::filter::DocumentFilter;
     use serde::{Deserialize, Serialize};
     use serde_json::json;
@@ -336,5 +337,76 @@ mod integration_tests {
         assert_eq!(res.deleted, 1);
         let count = coll.count(&DocumentFilter::And(vec![])).await.unwrap();
         assert_eq!(count, 1);
+    }
+
+    /// Documents that the `update_one` API surfaces a
+    /// `Serialization` error when the post-update JSON value cannot
+    /// be deserialized back into the collection's document type
+    /// (e.g. the update sets a required field to `null`). The
+    /// caller must learn about the failure — silently reporting
+    /// `modified: 0` would mask schema drift and broken writes.
+    ///
+    /// Also asserts the on-disk file and the in-memory cache both
+    /// remain in their pre-update state, so a fix that propagates
+    /// the error must not regress the previously-correct "no
+    /// half-written state" property.
+    #[tokio::test]
+    async fn update_one_surfaces_serialization_error_and_preserves_state() {
+        let dir = tempdir().unwrap();
+        let db = JsonFileDocumentDatabase::new(dir.path(), Duration::from_secs(1)).unwrap();
+        let loader_arc: DocumentLoader<Item> = Arc::new(loader);
+        let coll = db
+            .get_or_create_collection("items", json!({}), loader_arc)
+            .await
+            .unwrap();
+
+        let original = Item {
+            id: "a".into(),
+            name: "alpha".into(),
+            qty: 1,
+        };
+        coll.insert_one(original.clone()).await.unwrap();
+
+        let file_path = dir.path().join("items").join("a.json");
+        let bytes_before = std::fs::read(&file_path).unwrap();
+
+        // `name: String` is non-optional — writing `null` here makes
+        // `serde_json::from_value::<Item>` fail at the round-trip
+        // inside `update_one`.
+        let result = coll
+            .update_one(
+                &DocumentFilter::Eq {
+                    field: "id".into(),
+                    value: json!("a"),
+                },
+                DocumentUpdate::Set {
+                    field: "name".into(),
+                    value: JsonValue::Null,
+                },
+            )
+            .await;
+
+        match result {
+            Err(PersistenceError::Serialization(_)) => {}
+            other => panic!("expected PersistenceError::Serialization, got {:?}", other.map(|_| "Ok(_)").map_err(|e| e.to_string())),
+        }
+
+        // cache must still hold the original doc
+        let cached = coll
+            .find_one(&DocumentFilter::Eq {
+                field: "id".into(),
+                value: json!("a"),
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(cached, original);
+
+        // on-disk file must not have been rewritten
+        let bytes_after = std::fs::read(&file_path).unwrap();
+        assert_eq!(
+            bytes_before, bytes_after,
+            "on-disk file was modified despite the update failing"
+        );
     }
 }

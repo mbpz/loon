@@ -247,8 +247,10 @@ impl EngineContext {
     }
 }
 
-/// No-op `EventEmitter` used by `EngineContext::placeholder`.
-struct NoopEmitter;
+/// No-op `EventEmitter` used by `EngineContext::placeholder` and
+/// wired in by `AlphaEngine` whenever it needs an emitter that
+/// satisfies the trait without performing any side effects.
+pub struct NoopEmitter;
 #[async_trait]
 impl loon_emission::EventEmitter for NoopEmitter {
     async fn emit_status_event(

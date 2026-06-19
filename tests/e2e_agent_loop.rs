@@ -25,13 +25,28 @@ async fn e2e_server_builds_and_processes() {
         .await
         .unwrap();
 
-    let session_id = loon_core::SessionId::new();
+    // The new `process_message` contract looks up the session to
+    // discover the agent, so the e2e must seed both an agent and
+    // a session before processing a message. The previous version
+    // returned a hard-coded literal and silently passed without
+    // ever touching the engine.
+    let queries = server.queries();
+    let agent = loon_core::Agent::new("a", "b");
+    let agent_id = agent.id.clone();
+    queries.agent_store.create(agent).await.unwrap();
+    let session = loon_core::Session::new(&agent_id);
+    let session_id = session.id.clone();
+    queries.session_store.create(session).await.unwrap();
+
     let response = server.process_message(&session_id, "hi").await.unwrap();
-    assert!(
-        !response.is_empty(),
-        "response should be non-empty, got: {}",
-        response
-    );
+    // With `FakeNlpService` the engine emits an empty
+    // `FluidOutput::reply`, so the only end-to-end guarantee we
+    // can pin down is that the call routes through the engine
+    // (verified separately by the unit test in `loon-sdk`).
+    // The non-empty assertion is no longer valid for this
+    // minimal harness; we keep the call to prove the
+    // session-resolution + engine-dispatch path doesn't error.
+    let _ = response;
 }
 
 #[tokio::test]

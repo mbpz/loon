@@ -91,6 +91,25 @@ impl Engine for AlphaEngine {
         let agent = self.queries.read_agent(&context.agent_id).await?;
         let session = self.queries.read_session(&context.session_id).await?;
 
+        // Build a real EngineContext from queries so sub-components see
+        // the actual agent / customer / session / events instead of
+        // `EngineContext::placeholder()`.
+        let logger: std::sync::Arc<dyn loon_core::Logger> =
+            std::sync::Arc::new(loon_core::console_logger::ConsoleLogger);
+        let tracer: std::sync::Arc<dyn loon_core::Tracer> =
+            std::sync::Arc::new(loon_core::basic_tracer::BasicTracer::new());
+        let noop_emitter: std::sync::Arc<dyn EventEmitter> =
+            std::sync::Arc::new(crate::engine_context::NoopEmitter);
+        let engine_ctx = crate::engine_context::EngineContext::from_queries(
+            &self.queries,
+            context.clone(),
+            noop_emitter.clone(),
+            noop_emitter,
+            logger,
+            tracer,
+        )
+        .await?;
+
         // on_preparing hook (after agent+session load)
         let hctx = HookContext { point: "on_preparing", payload: None, error: None };
         if !self.hooks.run_chain(&self.hooks.on_preparing, &hctx)? {
@@ -141,11 +160,11 @@ impl Engine for AlphaEngine {
 
             let insights = self
                 .tool_caller
-                .generate_insights(&empty_engine_context(), &resolved)
+                .generate_insights(&engine_ctx, &resolved)
                 .await?;
             let executed = self
                 .tool_caller
-                .call_tools(&empty_engine_context(), &insights)
+                .call_tools(&engine_ctx, &insights)
                 .await?;
 
             // on_preparation_iteration_end hook
@@ -183,12 +202,12 @@ impl Engine for AlphaEngine {
         let messages = match agent.message_output_mode {
             MessageOutputMode::Canned => {
                 self.message_generator
-                    .generate_strict_message(&empty_engine_context(), &canned_responses)
+                    .generate_strict_message(&engine_ctx, &canned_responses)
                     .await?
             }
             MessageOutputMode::Fluid => {
                 self.message_generator
-                    .generate_fluid_message(&empty_engine_context())
+                    .generate_fluid_message(&engine_ctx)
                     .await?
             }
         };
@@ -250,10 +269,10 @@ impl Engine for AlphaEngine {
     }
 }
 
-/// Build a no-op `EngineContext` for use during preparation /
-/// generation calls. Mirrors the test-side helper in
-/// `message_generator.rs` so the engine can keep advancing through
-/// the pipeline without spinning up a real request context.
+/// Build a no-op `EngineContext` for use as a fallback default in
+/// tests. The production `process()` path now uses
+/// `EngineContext::from_queries`.
+#[allow(dead_code)]
 fn empty_engine_context() -> crate::engine_context::EngineContext {
     crate::engine_context::EngineContext::placeholder()
 }
@@ -1071,5 +1090,29 @@ mod tests {
             result,
             Err(crate::error::EngineError::HookBail)
         ));
+    }
+
+    /// Regression test for the public-availability of `NoopEmitter`.
+    ///
+    /// `AlphaEngine::process` internally constructs
+    /// `crate::engine_context::NoopEmitter` to satisfy the
+    /// `EngineContext::from_queries` signature. If that type is
+    /// accidentally made private (or its module path changes) the
+    /// whole crate stops compiling — this test exercises the
+    /// end-to-end pipeline using the **public** type, so a future
+    /// visibility regression fails this test (or fails to build)
+    /// instead of slipping through.
+    #[tokio::test]
+    async fn engine_uses_public_noop_emitter() {
+        let engine = make_engine();
+        let agent_id = AgentId::new();
+        let ctx = Context {
+            session_id: SessionId::new(),
+            agent_id,
+        };
+        let public_noop: std::sync::Arc<dyn EventEmitter> =
+            std::sync::Arc::new(crate::engine_context::NoopEmitter);
+        let result = engine.process(&ctx, public_noop.as_ref()).await.unwrap();
+        assert!(result);
     }
 }

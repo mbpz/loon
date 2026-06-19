@@ -10,6 +10,15 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 
+/// Parlcant-style AND-semantics tag filter: empty `requested` is
+/// "no filter"; non-empty `requested` matches when `owned` contains
+/// every requested tag. Shared by every `InMemory*Store::list`
+/// implementation that takes a `tags: &[TagId]` argument.
+fn matches_all_tags(requested: &[TagId], owned: &[TagId]) -> bool {
+    requested.is_empty() || requested.iter().all(|t| owned.contains(t))
+}
+
+
 use crate::stores::{
     AgentStore, CannedResponseStore, CapabilityStore, ContextVariableStore, CustomerStore,
     EvaluationStore, GlossaryStore, GuidelineStore, GuidelineToolAssociationStore, JourneyStore,
@@ -86,8 +95,13 @@ impl AgentStore for InMemoryAgentStore {
         self.data.lock().remove(id);
         Ok(())
     }
-    async fn list(&self, _tags: &[TagId]) -> CoreResult<Vec<Agent>> {
-        Ok(self.data.lock().values().cloned().collect())
+    async fn list(&self, tags: &[TagId]) -> CoreResult<Vec<Agent>> {
+        let all = self.data.lock();
+        Ok(all
+            .values()
+            .filter(|a| matches_all_tags(tags, &a.tags))
+            .cloned()
+            .collect())
     }
 }
 
@@ -248,12 +262,12 @@ impl GuidelineStore for InMemoryGuidelineStore {
         self.data.lock().remove(id);
         Ok(())
     }
-    async fn list(&self, agent_id: &AgentId, _tags: &[TagId]) -> CoreResult<Vec<Guideline>> {
-        Ok(self
-            .data
-            .lock()
+    async fn list(&self, agent_id: &AgentId, tags: &[TagId]) -> CoreResult<Vec<Guideline>> {
+        let all = self.data.lock();
+        Ok(all
             .values()
             .filter(|g| &g.agent_id == agent_id)
+            .filter(|g| matches_all_tags(tags, &g.tags))
             .cloned()
             .collect())
     }
@@ -463,8 +477,13 @@ impl CustomerStore for InMemoryCustomerStore {
         self.data.lock().remove(id);
         Ok(())
     }
-    async fn list(&self, _tags: &[TagId]) -> CoreResult<Vec<Customer>> {
-        Ok(self.data.lock().values().cloned().collect())
+    async fn list(&self, tags: &[TagId]) -> CoreResult<Vec<Customer>> {
+        let all = self.data.lock();
+        Ok(all
+            .values()
+            .filter(|c| matches_all_tags(tags, &c.tags))
+            .cloned()
+            .collect())
     }
 }
 
@@ -1228,5 +1247,215 @@ mod tests {
         assert_eq!(loaded.example_input, "in");
         // touch unused crate-internal reference
         let _ = Criticality::Low;
+    }
+
+    /// `InMemoryAgentStore::list` must apply its `tags` filter rather
+    /// than return every stored agent. The trait contract is:
+    /// empty `tags` ⇒ no filter; non-empty `tags` ⇒ return only
+    /// agents whose `tags` vector contains **all** of the requested
+    /// ids (parlcant semantics: `if tags and not all(t in self.tags
+    /// for t in tags): continue`).
+    #[tokio::test]
+    async fn in_memory_agent_store_list_filters_by_tags() {
+        let s = InMemoryAgentStore::new();
+        let tagged = TagId::new();
+        let other = TagId::new();
+
+        // Agent carrying only `tagged`.
+        let mut a1 = Agent::new("a1", "first");
+        a1.tags = vec![tagged.clone()];
+        s.create(a1.clone()).await.unwrap();
+
+        // Agent carrying both `tagged` and `other`.
+        let mut a2 = Agent::new("a2", "second");
+        a2.tags = vec![tagged.clone(), other.clone()];
+        s.create(a2.clone()).await.unwrap();
+
+        // Untagged agent.
+        let a3 = Agent::new("a3", "third");
+        s.create(a3.clone()).await.unwrap();
+
+        // Empty tag list ⇒ no filter, all three returned.
+        let all = s.list(&[]).await.unwrap();
+        assert_eq!(all.len(), 3, "empty tag filter must return every agent");
+
+        // Single matching tag ⇒ both tagged agents, in insertion
+        // order (HashMap iteration is non-deterministic so we sort
+        // by name for the assertion).
+        let mut by_tagged = s.list(std::slice::from_ref(&tagged)).await.unwrap();
+        by_tagged.sort_by(|x, y| x.name.cmp(&y.name));
+        let names: Vec<&str> = by_tagged.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["a1", "a2"],
+            "tag filter must drop untagged agent and keep every agent that carries the tag"
+        );
+
+        // Two required tags ⇒ only the agent that carries **both**.
+        let mut by_both = s.list(&[tagged.clone(), other.clone()]).await.unwrap();
+        by_both.sort_by(|x, y| x.name.cmp(&y.name));
+        let names: Vec<&str> = by_both.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["a2"],
+            "AND-semantics: agent must carry every requested tag"
+        );
+
+        // Tag no agent carries ⇒ empty result.
+        let lonely = TagId::new();
+        let none = s.list(&[lonely]).await.unwrap();
+        assert!(none.is_empty(), "filter for a tag nobody carries must be empty");
+    }
+
+    /// `InMemoryGuidelineStore::list` must apply **both** the
+    /// `agent_id` and the `tags` filter rather than collapse to
+    /// agent-only. Tag filter follows the same parlcant
+    /// AND-semantics used by [`in_memory_agent_store_list_filters_by_tags`]:
+    /// empty `tags` ⇒ no tag filter; non-empty ⇒ guideline must
+    /// carry every requested tag.
+    #[tokio::test]
+    async fn in_memory_guideline_store_list_filters_by_agent_and_tags() {
+        let s = InMemoryGuidelineStore::new();
+        let agent_x = AgentId::new();
+        let agent_y = AgentId::new();
+        let tag_t = TagId::new();
+        let tag_other = TagId::new();
+        let tag_lonely = TagId::new();
+
+        // X, tag T
+        let mut g1 = Guideline::new(
+            GuidelineContent { condition: "c1".into(), action: "a".into(), description: None },
+            &agent_x, true, 0,
+        );
+        g1.tags = vec![tag_t.clone()];
+        let id1 = g1.id.clone();
+        s.create(g1).await.unwrap();
+
+        // X, untagged
+        let g2 = Guideline::new(
+            GuidelineContent { condition: "c2".into(), action: "a".into(), description: None },
+            &agent_x, true, 0,
+        );
+        let id2 = g2.id.clone();
+        s.create(g2).await.unwrap();
+
+        // X, tag T + tag_other
+        let mut g3 = Guideline::new(
+            GuidelineContent { condition: "c3".into(), action: "a".into(), description: None },
+            &agent_x, true, 0,
+        );
+        g3.tags = vec![tag_t.clone(), tag_other.clone()];
+        let id3 = g3.id.clone();
+        s.create(g3).await.unwrap();
+
+        // Y, tag T (must not leak into agent-X queries)
+        let mut g4 = Guideline::new(
+            GuidelineContent { condition: "c4".into(), action: "a".into(), description: None },
+            &agent_y, true, 0,
+        );
+        g4.tags = vec![tag_t.clone()];
+        let id4 = g4.id.clone();
+        s.create(g4).await.unwrap();
+
+        // Empty tag filter ⇒ all agent-X guidelines (Y must be excluded).
+        let mut x_all = s.list(&agent_x, &[]).await.unwrap();
+        x_all.sort_by(|a, b| a.content.condition.cmp(&b.content.condition));
+        let x_all_ids: std::collections::HashSet<_> = x_all.iter().map(|g| g.id.clone()).collect();
+        assert_eq!(
+            x_all_ids,
+            [id1.clone(), id2.clone(), id3.clone()].into_iter().collect(),
+            "agent filter alone must drop agent-Y guideline"
+        );
+
+        // Single tag T on agent X ⇒ g1, g3 (g2 is untagged, g4 is other agent).
+        let mut x_t = s.list(&agent_x, std::slice::from_ref(&tag_t)).await.unwrap();
+        x_t.sort_by(|a, b| a.content.condition.cmp(&b.content.condition));
+        let x_t_ids: std::collections::HashSet<_> = x_t.iter().map(|g| g.id.clone()).collect();
+        assert_eq!(
+            x_t_ids,
+            [id1.clone(), id3.clone()].into_iter().collect(),
+            "tag filter on agent X must drop untagged g2 and cross-agent g4"
+        );
+
+        // AND-semantics: tag T + tag_other on agent X ⇒ only g3.
+        let x_both = s.list(&agent_x, &[tag_t.clone(), tag_other.clone()]).await.unwrap();
+        assert_eq!(
+            x_both.iter().map(|g| g.id.clone()).collect::<Vec<_>>(),
+            vec![id3.clone()],
+            "AND-semantics: guideline must carry every requested tag"
+        );
+
+        // Tag no guideline carries ⇒ empty.
+        assert!(s.list(&agent_x, std::slice::from_ref(&tag_lonely)).await.unwrap().is_empty());
+
+        // Same tag T on agent Y ⇒ only g4 (proves agent_id filter is
+        // applied first / in combination, not bypassed by tag).
+        let y_t = s.list(&agent_y, std::slice::from_ref(&tag_t)).await.unwrap();
+        assert_eq!(
+            y_t.iter().map(|g| g.id.clone()).collect::<Vec<_>>(),
+            vec![id4.clone()],
+            "agent-Y tag filter must not see agent-X guidelines even when their tags match"
+        );
+    }
+
+    /// `InMemoryCustomerStore::list` must apply its `tags` filter
+    /// rather than return every stored customer. Same parlcant
+    /// AND-semantics as the agent and guideline stores: empty
+    /// `tags` ⇒ no filter; non-empty ⇒ customer must carry every
+    /// requested tag.
+    #[tokio::test]
+    async fn in_memory_customer_store_list_filters_by_tags() {
+        let s = InMemoryCustomerStore::new();
+        let tag_t = TagId::new();
+        let tag_other = TagId::new();
+        let tag_lonely = TagId::new();
+
+        // Customer carrying only `tag_t`.
+        let mut c1 = Customer::new("c1");
+        c1.tags = vec![tag_t.clone()];
+        let id1 = c1.id.clone();
+        s.create(c1).await.unwrap();
+
+        // Customer carrying `tag_t` + `tag_other`.
+        let mut c2 = Customer::new("c2");
+        c2.tags = vec![tag_t.clone(), tag_other.clone()];
+        let id2 = c2.id.clone();
+        s.create(c2).await.unwrap();
+
+        // Untagged customer.
+        let c3 = Customer::new("c3");
+        let id3 = c3.id.clone();
+        s.create(c3).await.unwrap();
+
+        // Empty tag filter ⇒ all three.
+        let all_ids: std::collections::HashSet<_> =
+            s.list(&[]).await.unwrap().iter().map(|c| c.id.clone()).collect();
+        assert_eq!(
+            all_ids,
+            [id1.clone(), id2.clone(), id3.clone()].into_iter().collect(),
+            "empty tag filter must return every customer"
+        );
+
+        // Single tag T ⇒ c1, c2 (c3 untagged is dropped).
+        let mut by_t = s.list(std::slice::from_ref(&tag_t)).await.unwrap();
+        by_t.sort_by(|a, b| a.name.cmp(&b.name));
+        let t_ids: Vec<_> = by_t.iter().map(|c| c.id.clone()).collect();
+        assert_eq!(
+            t_ids,
+            vec![id1.clone(), id2.clone()],
+            "tag filter must drop the untagged customer"
+        );
+
+        // AND-semantics: tag T + tag_other ⇒ only c2.
+        let by_both = s.list(&[tag_t.clone(), tag_other.clone()]).await.unwrap();
+        let both_ids: Vec<_> = by_both.iter().map(|c| c.id.clone()).collect();
+        assert_eq!(
+            both_ids,
+            vec![id2.clone()],
+            "AND-semantics: customer must carry every requested tag"
+        );
+
+        // Tag nobody carries ⇒ empty.
+        assert!(s.list(&[tag_lonely]).await.unwrap().is_empty());
     }
 }
