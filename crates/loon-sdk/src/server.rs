@@ -2,19 +2,23 @@
 //! embedding `loon` into another application.
 //!
 //! [`ServerBuilder::build`] returns a [`Server`] whose [`Engine`]
-//! is a real [`loon_engine::AlphaEngine`] backed by an in-memory
-//! [`loon_core::entity_cq::EntityQueries`] graph. Callers can
-//! override the queries graph with [`ServerBuilder::with_entity_queries`]
-//! and the NLP service with [`ServerBuilder::with_nlp_service`];
-//! anything left unset falls back to a fully in-memory default
-//! suitable for examples and tests.
+//! is a real [`loon_engine::AlphaEngine`] backed by an
+//! [`loon_core::entity_cq::EntityQueries`] graph. Callers can override
+//! the queries graph in three ways:
 //!
-//! `with_document_db` is currently a diagnostics-only hook —
-//! `DocumentDatabase::get_or_create_collection<T>` is generic and
-//! therefore not dyn-compatible, so the SDK can't store an
-//! `Arc<dyn DocumentDatabase>`. A future phase will add a
-//! database-backed `EntityQueries` factory the user can pass via
-//! `with_entity_queries`.
+//! 1. [`ServerBuilder::with_document_db`] takes any
+//!    [`loon_persistence::DocumentDatabaseHandle`] (a
+//!    [`loon_persistence::backends::json_file::JsonFileDocumentDatabase`]
+//!    or [`loon_persistence::backends::mongodb::MongoDocumentDatabase`])
+//!    and wires it through to `EntityQueries::from_document_database`,
+//!    so every entity persists across server restarts.
+//! 2. [`ServerBuilder::with_entity_queries`] accepts a pre-built
+//!    queries graph (useful in tests that wire fake stores by hand).
+//! 3. If neither is set, [`ServerBuilder::build`] falls back to
+//!    [`loon_core::entity_cq::EntityQueries::in_memory`].
+//!
+//! When both `with_document_db` and `with_entity_queries` are set,
+//! the pre-built queries graph wins.
 
 use std::sync::Arc;
 
@@ -27,15 +31,13 @@ use crate::error::SdkResult;
 /// diagnostics from its dependencies; full engine wiring lands
 /// later.
 pub struct ServerBuilder {
-    /// Type name of the `DocumentDatabase` passed via
-    /// [`ServerBuilder::with_document_db`]. Used for diagnostics
-    /// only — `DocumentDatabase` isn't dyn-compatible because
-    /// `get_or_create_collection<T>` is generic, so the SDK can't
-    /// store an `Arc<dyn DocumentDatabase>`. A later phase will
-    /// expose a database-backed `EntityQueries` factory the user
-    /// passes via [`ServerBuilder::with_entity_queries`].
-    #[allow(dead_code)]
-    document_db_label: Option<String>,
+    /// Type-erased handle to the document database that backs the
+    /// real entity stores. When set, [`ServerBuilder::build`]
+    /// constructs an [`EntityQueries`](loon_core::entity_cq::EntityQueries)
+    /// via [`loon_core::entity_cq::EntityQueries::from_document_database`].
+    /// Mutually exclusive (in effect) with `entity_queries` — the
+    /// pre-built queries graph wins when both are set.
+    document_db_handle: Option<Arc<dyn loon_persistence::DocumentDatabaseHandle>>,
     /// Optional `NlpService` passed via
     /// [`ServerBuilder::with_nlp_service`]. Wired into the engine
     /// at [`ServerBuilder::build`] time; defaults to
@@ -79,7 +81,7 @@ pub struct ServerBuilder {
 impl ServerBuilder {
     pub fn new() -> Self {
         Self {
-            document_db_label: None,
+            document_db_handle: None,
             nlp_service: None,
             vector_db: None,
             mcp_clients: Vec::new(),
@@ -89,20 +91,26 @@ impl ServerBuilder {
         }
     }
 
-    /// Reserve a hook for the document database that will back the
-    /// real entity stores. The handle is recorded for diagnostics
-    /// only — `DocumentDatabase` isn't dyn-compatible (the
-    /// `get_or_create_collection<T>` method is generic), so the
-    /// SDK can't store an `Arc<dyn DocumentDatabase>`. Wire a
-    /// database-backed graph by constructing an
-    /// `EntityQueries` directly and passing it via
-    /// [`ServerBuilder::with_entity_queries`].
-    pub fn with_document_db<DB: loon_persistence::DocumentDatabase + 'static>(
+    /// Provide the document database that will back the real entity
+    /// stores. The handle is consumed by [`ServerBuilder::build`] —
+    /// when set (and no `with_entity_queries` override is in play),
+    /// the server's [`EntityQueries`](loon_core::entity_cq::EntityQueries)
+    /// is constructed via
+    /// [`loon_core::entity_cq::EntityQueries::from_document_database`]
+    /// so every entity persists across server restarts.
+    ///
+    /// `DB` is any type implementing
+    /// [`loon_persistence::DocumentDatabaseHandle`] (the dyn-safe
+    /// counterpart of `DocumentDatabase`). Both
+    /// [`loon_persistence::backends::json_file::JsonFileDocumentDatabase`]
+    /// and [`loon_persistence::backends::mongodb::MongoDocumentDatabase`]
+    /// implement it.
+    pub fn with_document_db<DB: loon_persistence::DocumentDatabaseHandle + 'static>(
         mut self,
         db: Arc<DB>,
     ) -> Self {
-        self.document_db_label = Some(std::any::type_name::<DB>().to_string());
-        let _ = db;
+        let handle: Arc<dyn loon_persistence::DocumentDatabaseHandle> = db;
+        self.document_db_handle = Some(handle);
         self
     }
 
@@ -207,9 +215,13 @@ impl ServerBuilder {
             PerceivedPerformancePolicy,
         };
 
-        let queries = self
-            .entity_queries
-            .unwrap_or_else(loon_core::entity_cq::EntityQueries::in_memory);
+        let queries: Arc<loon_core::entity_cq::EntityQueries> = if let Some(q) = self.entity_queries {
+            q
+        } else if let Some(handle) = self.document_db_handle {
+            loon_core::entity_cq::EntityQueries::from_document_database(handle).await?
+        } else {
+            loon_core::entity_cq::EntityQueries::in_memory()
+        };
         let commands = Arc::new(loon_core::entity_cq::EntityCommands {
             session_store: queries.session_store.clone(),
             context_variable_store: queries.context_variable_store.clone(),
@@ -436,6 +448,52 @@ mod tests {
             .await
             .expect("build ok");
         let _: Arc<dyn Engine> = server.engine.clone();
+    }
+
+    /// `with_document_db` is no longer a no-op: when set, the
+    /// constructed [`Server`] writes entities through a
+    /// document-backed [`EntityQueries`] graph. Verifying this
+    /// requires building two servers against the same on-disk
+    /// directory and reading back a record written by the first
+    /// server through the second.
+    #[tokio::test]
+    async fn build_uses_document_db_when_provided() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().to_path_buf();
+
+        let agent_id = {
+            let db = Arc::new(
+                JsonFileDocumentDatabase::new(&path, Duration::from_millis(50)).unwrap(),
+            );
+            let server = Server::builder()
+                .with_document_db(db)
+                .with_nlp_service(Arc::new(FakeNlpService::new()))
+                .build()
+                .await
+                .expect("build1");
+            let agent = loon_core::Agent::new("doc-persist", "first run");
+            let id = agent.id.clone();
+            server.queries.agent_store.create(agent).await.unwrap();
+            id
+        };
+
+        // Second server points at the same dir and must see the
+        // agent the first server wrote.
+        let db2 = Arc::new(
+            JsonFileDocumentDatabase::new(&path, Duration::from_millis(50)).unwrap(),
+        );
+        let server2 = Server::builder()
+            .with_document_db(db2)
+            .with_nlp_service(Arc::new(FakeNlpService::new()))
+            .build()
+            .await
+            .expect("build2");
+        let agent = server2.queries.agent_store.read(&agent_id).await.unwrap();
+        assert!(
+            agent.is_some(),
+            "agent written by the first server must be visible to the second when both share the same document db"
+        );
+        assert_eq!(agent.unwrap().name, "doc-persist");
     }
 
     /// In-memory `VectorDatabase` used only to exercise
