@@ -234,10 +234,11 @@ impl ServerBuilder {
         let matcher: Arc<dyn loon_engine::guideline_matching::GuidelineMatcher> =
             Arc::new(LlmGuidelineMatcher::new(nlp.clone()));
         let tool_caller: Arc<dyn loon_engine::tool_calling::ToolCaller> =
-            Arc::new(DefaultToolCallBatcher {
-                nlp: nlp.clone(),
-                registry: Arc::new(loon_core::InMemoryServiceRegistry::new()),
-            });
+            Arc::new(DefaultToolCallBatcher::new(
+                nlp.clone(),
+                Arc::new(loon_core::InMemoryServiceRegistry::new()),
+                queries.clone(),
+            ));
         let planner: Arc<dyn loon_engine::Planner> = Arc::new(NoopPlanner);
         let prompt_builder = Arc::new(PromptBuilder::new(
             Arc::new(loon_nlp::OpenAiTokenizer),

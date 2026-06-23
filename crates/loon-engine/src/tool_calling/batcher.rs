@@ -14,6 +14,25 @@ use crate::tool_calling::caller::{ToolCaller, ToolExecutionResult};
 pub struct DefaultToolCallBatcher {
     pub nlp: Arc<dyn NlpService>,
     pub registry: Arc<dyn ServiceRegistry>,
+    pub queries: Arc<loon_core::entity_cq::EntityQueries>,
+    /// Service name to look up in `registry`. Defaults to "local"
+    /// which matches `LocalToolService`'s typical registration name.
+    pub service_name: String,
+}
+
+impl DefaultToolCallBatcher {
+    pub fn new(
+        nlp: Arc<dyn NlpService>,
+        registry: Arc<dyn ServiceRegistry>,
+        queries: Arc<loon_core::entity_cq::EntityQueries>,
+    ) -> Self {
+        Self {
+            nlp,
+            registry,
+            queries,
+            service_name: "local".into(),
+        }
+    }
 }
 
 #[async_trait]
@@ -45,10 +64,8 @@ mod tests {
     async fn default_batcher_new_compiles_and_default_methods_run() {
         let nlp: Arc<dyn NlpService> = Arc::new(FakeNlpService::new());
         let registry: Arc<dyn ServiceRegistry> = Arc::new(InMemoryServiceRegistry::new());
-        let batcher = DefaultToolCallBatcher {
-            nlp: nlp.clone(),
-            registry: registry.clone(),
-        };
+        let queries = loon_core::entity_cq::EntityQueries::in_memory();
+        let batcher = DefaultToolCallBatcher::new(nlp.clone(), registry.clone(), queries);
         let insights = batcher
             .generate_insights(&dummy_ctx(nlp.clone(), registry.clone()), &[])
             .await
