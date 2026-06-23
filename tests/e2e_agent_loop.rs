@@ -74,3 +74,47 @@ async fn e2e_server_run_closure_executes() {
         .unwrap();
     assert!(invoked.load(std::sync::atomic::Ordering::SeqCst));
 }
+
+/// End-to-end: data written through one `Server` survives a full
+/// process-level rebuild as long as both servers point at the same
+/// on-disk `JsonFileDocumentDatabase` directory. This is the
+/// load-bearing contract for `with_document_db` — if a future change
+/// drops the handle silently, this test starts failing.
+#[tokio::test]
+async fn e2e_data_persists_across_server_rebuilds() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().to_path_buf();
+
+    let agent_id = {
+        let db = Arc::new(JsonFileDocumentDatabase::new(&path, Duration::from_millis(50)).unwrap());
+        let nlp: Arc<dyn loon_nlp::NlpService> = Arc::new(FakeNlpService::new());
+        let server = p::Server::builder()
+            .with_document_db(db)
+            .with_nlp_service(nlp)
+            .build()
+            .await
+            .unwrap();
+        let agent = loon_core::Agent::new("crash-resistant", "first-server");
+        let id = agent.id.clone();
+        server.queries.agent_store.create(agent).await.unwrap();
+        drop(server);
+        id
+    };
+
+    // Second server: build a brand-new instance against the same dir.
+    let db2 = Arc::new(JsonFileDocumentDatabase::new(&path, Duration::from_millis(50)).unwrap());
+    let nlp2: Arc<dyn loon_nlp::NlpService> = Arc::new(FakeNlpService::new());
+    let server2 = p::Server::builder()
+        .with_document_db(db2)
+        .with_nlp_service(nlp2)
+        .build()
+        .await
+        .unwrap();
+
+    let agent = server2.queries.agent_store.read(&agent_id).await.unwrap();
+    assert!(
+        agent.is_some(),
+        "agent must persist across server rebuilds when both share the same JsonFileDocumentDatabase directory"
+    );
+    assert_eq!(agent.unwrap().name, "crash-resistant");
+}

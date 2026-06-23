@@ -919,6 +919,7 @@ mod tests {
             tool_store: Arc::new(loon_core::stores::InMemoryToolStore::new()),
             evaluation_store: Arc::new(loon_core::stores::InMemoryEvaluationStore::new()),
             tag_store: Arc::new(loon_core::stores::InMemoryTagStore::new()),
+            shot_store: Arc::new(loon_core::stores::InMemoryShotStore::new()),
             journey_guideline_projection: jgp,
         })
     }

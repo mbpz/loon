@@ -53,15 +53,15 @@ pub async fn run() -> anyhow::Result<()> {
                     Duration::from_millis(*flush_interval_ms),
                 )?,
             );
-            // Phase 9 startup hook (stub): construct the migration helper but
-            // don't actually run a plan because no migrations are registered
-            // yet. Once a `MigrationPlan` exists, this is where `enter()` and
-            // `JsonFileMigrator` would be wired in.
-            let _migration_helper =
+            // Construct the migration helper alongside the DB so a future
+            // MigrationPlan can be entered before the server starts serving
+            // requests. The helper holds its own clone of the handle and
+            // doesn't block server startup if no plan is registered yet.
+            let migration_helper =
                 loon_persistence::migration::DocumentStoreMigrationHelper::from_database(
                     db.clone(),
                 );
-            if let Err(e) = _migration_helper.ping().await {
+            if let Err(e) = migration_helper.ping().await {
                 tracing::warn!("migration helper ping failed: {e}");
             }
             loon_sdk::Server::builder()
@@ -75,11 +75,11 @@ pub async fn run() -> anyhow::Result<()> {
                 loon_persistence::backends::mongodb::MongoDocumentDatabase::connect(uri, database)
                     .await?,
             );
-            let _migration_helper =
+            let migration_helper =
                 loon_persistence::migration::DocumentStoreMigrationHelper::from_database(
                     db.clone(),
                 );
-            if let Err(e) = _migration_helper.ping().await {
+            if let Err(e) = migration_helper.ping().await {
                 tracing::warn!("migration helper ping failed: {e}");
             }
             loon_sdk::Server::builder()
