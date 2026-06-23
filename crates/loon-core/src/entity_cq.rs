@@ -6,7 +6,7 @@ use crate::journey_guideline_projection::JourneyGuidelineProjection;
 use crate::stores::{
     AgentStore, CannedResponseStore, CapabilityStore, ContextVariableStore, CustomerStore,
     EvaluationStore, GlossaryStore, GuidelineStore, GuidelineToolAssociationStore, JourneyStore,
-    RelationshipStore, RetrieverStore, SessionStore, TagStore, ToolStore,
+    RelationshipStore, RetrieverStore, SessionStore, ShotStore, TagStore, ToolStore,
 };
 use crate::{
     Agent, AgentId, CannedResponse, Capability, ContextVariable, ContextVariableId,
@@ -31,6 +31,7 @@ pub struct EntityQueries {
     pub tool_store: Arc<dyn ToolStore>,
     pub evaluation_store: Arc<dyn EvaluationStore>,
     pub tag_store: Arc<dyn TagStore>,
+    pub shot_store: Arc<dyn ShotStore>,
     pub journey_guideline_projection: Arc<JourneyGuidelineProjection>,
 }
 
@@ -132,7 +133,7 @@ impl EntityQueries {
             InMemoryContextVariableStore, InMemoryCustomerStore, InMemoryEvaluationStore,
             InMemoryGlossaryStore, InMemoryGuidelineStore, InMemoryGuidelineToolAssociationStore,
             InMemoryJourneyStore, InMemoryRelationshipStore, InMemoryRetrieverStore,
-            InMemorySessionStore, InMemoryTagStore, InMemoryToolStore,
+            InMemorySessionStore, InMemoryShotStore, InMemoryTagStore, InMemoryToolStore,
         };
 
         let agent_store: Arc<dyn AgentStore> = Arc::new(InMemoryAgentStore::new());
@@ -154,6 +155,7 @@ impl EntityQueries {
         let tool_store: Arc<dyn ToolStore> = Arc::new(InMemoryToolStore::new());
         let evaluation_store: Arc<dyn EvaluationStore> = Arc::new(InMemoryEvaluationStore::new());
         let tag_store: Arc<dyn TagStore> = Arc::new(InMemoryTagStore::new());
+        let shot_store: Arc<dyn ShotStore> = Arc::new(InMemoryShotStore::new());
         let projection = Arc::new(JourneyGuidelineProjection {
             journey_store: journey_store.clone(),
             guideline_store: guideline_store.clone(),
@@ -174,8 +176,105 @@ impl EntityQueries {
             tool_store,
             evaluation_store,
             tag_store,
+            shot_store,
             journey_guideline_projection: projection,
         })
+    }
+
+    /// Build an [`EntityQueries`] instance backed by a
+    /// [`loon_persistence::DocumentDatabaseHandle`]. Opens one named
+    /// collection per entity kind (`"agents"`, `"sessions"`, …); the
+    /// per-session event sub-collections (`"events_{sid}"`) are
+    /// opened lazily by `SessionStore::create_event`. Use this from
+    /// `ServerBuilder::with_document_db` when wiring real
+    /// persistence — `in_memory()` stays the default for quick-start
+    /// examples and tests.
+    pub async fn from_document_database(
+        handle: Arc<dyn loon_persistence::DocumentDatabaseHandle>,
+    ) -> Result<Arc<Self>, loon_persistence::PersistenceError> {
+        use crate::stores::{
+            DocumentBackedAgentStore, DocumentBackedCannedResponseStore,
+            DocumentBackedCapabilityStore, DocumentBackedContextVariableStore,
+            DocumentBackedCustomerStore, DocumentBackedEvaluationStore,
+            DocumentBackedGlossaryStore, DocumentBackedGuidelineStore,
+            DocumentBackedGuidelineToolAssociationStore, DocumentBackedJourneyStore,
+            DocumentBackedRelationshipStore, DocumentBackedRetrieverStore,
+            DocumentBackedSessionStore, DocumentBackedShotStore, DocumentBackedTagStore,
+            DocumentBackedToolStore,
+        };
+
+        let agent_store: Arc<dyn AgentStore> =
+            Arc::new(DocumentBackedAgentStore::new(handle.collection("agents").await?));
+        let session_store: Arc<dyn SessionStore> = Arc::new(DocumentBackedSessionStore::new(
+            handle.collection("sessions").await?,
+            handle.clone(),
+        ));
+        let guideline_store: Arc<dyn GuidelineStore> = Arc::new(
+            DocumentBackedGuidelineStore::new(handle.collection("guidelines").await?),
+        );
+        let customer_store: Arc<dyn CustomerStore> = Arc::new(DocumentBackedCustomerStore::new(
+            handle.collection("customers").await?,
+        ));
+        let context_variable_store: Arc<dyn ContextVariableStore> =
+            Arc::new(DocumentBackedContextVariableStore::new(
+                handle.collection("context_variables").await?,
+                handle.collection("context_variable_values").await?,
+            ));
+        let relationship_store: Arc<dyn RelationshipStore> = Arc::new(
+            DocumentBackedRelationshipStore::new(handle.collection("relationships").await?),
+        );
+        let guideline_tool_association_store: Arc<dyn GuidelineToolAssociationStore> =
+            Arc::new(DocumentBackedGuidelineToolAssociationStore::new(
+                handle.collection("guideline_tool_associations").await?,
+            ));
+        let glossary_store: Arc<dyn GlossaryStore> = Arc::new(DocumentBackedGlossaryStore::new(
+            handle.collection("glossary").await?,
+        ));
+        let journey_store: Arc<dyn JourneyStore> = Arc::new(DocumentBackedJourneyStore::new(
+            handle.collection("journeys").await?,
+        ));
+        let canned_response_store: Arc<dyn CannedResponseStore> = Arc::new(
+            DocumentBackedCannedResponseStore::new(handle.collection("canned_responses").await?),
+        );
+        let capability_store: Arc<dyn CapabilityStore> = Arc::new(
+            DocumentBackedCapabilityStore::new(handle.collection("capabilities").await?),
+        );
+        let retriever_store: Arc<dyn RetrieverStore> = Arc::new(DocumentBackedRetrieverStore::new(
+            handle.collection("retrievers").await?,
+        ));
+        let tool_store: Arc<dyn ToolStore> =
+            Arc::new(DocumentBackedToolStore::new(handle.collection("tools").await?));
+        let evaluation_store: Arc<dyn EvaluationStore> = Arc::new(
+            DocumentBackedEvaluationStore::new(handle.collection("evaluations").await?),
+        );
+        let tag_store: Arc<dyn TagStore> =
+            Arc::new(DocumentBackedTagStore::new(handle.collection("tags").await?));
+        let shot_store: Arc<dyn ShotStore> =
+            Arc::new(DocumentBackedShotStore::new(handle.collection("shots").await?));
+
+        let projection = Arc::new(JourneyGuidelineProjection {
+            journey_store: journey_store.clone(),
+            guideline_store: guideline_store.clone(),
+        });
+        Ok(Arc::new(Self {
+            agent_store,
+            session_store,
+            guideline_store,
+            customer_store,
+            context_variable_store,
+            relationship_store,
+            guideline_tool_association_store,
+            glossary_store,
+            journey_store,
+            canned_response_store,
+            capability_store,
+            retriever_store,
+            tool_store,
+            evaluation_store,
+            tag_store,
+            shot_store,
+            journey_guideline_projection: projection,
+        }))
     }
 }
 
@@ -242,5 +341,45 @@ mod tests {
         q.agent_store.create(agent).await.unwrap();
         let loaded = q.read_agent(&id).await.unwrap();
         assert_eq!(loaded.name, "test");
+    }
+
+    /// `from_document_database` builds an [`EntityQueries`] whose
+    /// stores round-trip through the underlying on-disk database.
+    /// Data written via the queries graph must survive opening a
+    /// fresh handle pointed at the same directory — proving the
+    /// factory wires the document-backed stores rather than silently
+    /// falling back to in-memory.
+    #[tokio::test]
+    async fn from_document_database_persists_across_handles() {
+        use loon_persistence::backends::json_file::JsonFileDocumentDatabase;
+        use loon_persistence::DocumentDatabaseHandle;
+        use std::time::Duration;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+
+        // First handle: create + persist an agent.
+        let id = {
+            let db: Arc<dyn DocumentDatabaseHandle> = Arc::new(
+                JsonFileDocumentDatabase::new(&path, Duration::from_millis(50)).unwrap(),
+            );
+            let queries = EntityQueries::from_document_database(db).await.unwrap();
+            let agent = Agent::new("persisted", "y");
+            let id = agent.id.clone();
+            queries.agent_store.create(agent).await.unwrap();
+            id
+        };
+
+        // Second handle on the same directory: agent must still be readable.
+        let db: Arc<dyn DocumentDatabaseHandle> = Arc::new(
+            JsonFileDocumentDatabase::new(&path, Duration::from_millis(50)).unwrap(),
+        );
+        let queries = EntityQueries::from_document_database(db).await.unwrap();
+        let agent = queries.agent_store.read(&id).await.unwrap();
+        assert!(
+            agent.is_some(),
+            "agent created via document-backed queries must persist across handle re-open"
+        );
+        assert_eq!(agent.unwrap().name, "persisted");
     }
 }
