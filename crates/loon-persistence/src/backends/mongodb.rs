@@ -15,8 +15,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::document::{
-    BaseDocument, DeleteResult, Document, DocumentCollection, DocumentDatabase,
-    DocumentDatabaseHandle, DocumentLoader, DocumentUpdate, InsertResult, UpdateResult,
+    BaseDocument, DeleteResult, Document, DocumentCollection, DocumentCollectionHandle,
+    DocumentDatabase, DocumentDatabaseHandle, DocumentLoader, DocumentUpdate, InsertResult,
+    UpdateResult,
 };
 use crate::error::{PersistenceError, PersistenceResult};
 use crate::filter::DocumentFilter;
@@ -62,6 +63,115 @@ impl DocumentDatabaseHandle for MongoDocumentDatabase {
         // MongoDB may be slow to respond when the topology is degraded.
         // A real readiness check can be added later by calling `list_collection_names`.
         Ok(())
+    }
+
+    async fn collection(
+        &self,
+        name: &str,
+    ) -> PersistenceResult<Arc<dyn DocumentCollectionHandle>> {
+        let collection = self.database.collection::<BsonDocument>(name);
+        Ok(Arc::new(MongoCollectionHandle { collection }))
+    }
+}
+
+/// Type-erased MongoDB collection handle. Operates at the `BsonDocument`
+/// level so the trait stays dyn-compatible. Document payloads are
+/// round-tripped through `serde_json::Value` for compatibility with the
+/// rest of the persistence layer.
+pub struct MongoCollectionHandle {
+    collection: Collection<BsonDocument>,
+}
+
+#[async_trait]
+impl DocumentCollectionHandle for MongoCollectionHandle {
+    async fn insert_one(&self, doc: BaseDocument) -> PersistenceResult<()> {
+        let bson_doc = bson::to_document(&doc)
+            .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+        self.collection
+            .insert_one(bson_doc)
+            .await
+            .map_err(|e| PersistenceError::Internal(format!("mongo insert: {e}")))?;
+        Ok(())
+    }
+
+    async fn find_one(
+        &self,
+        filter: &DocumentFilter,
+    ) -> PersistenceResult<Option<BaseDocument>> {
+        let query = filter_to_mongo(filter);
+        let result = self
+            .collection
+            .find_one(query)
+            .await
+            .map_err(|e| PersistenceError::Internal(format!("mongo find_one: {e}")))?;
+        match result {
+            Some(bson_doc) => {
+                let v: BaseDocument = bson::from_bson(Bson::Document(bson_doc))
+                    .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+                Ok(Some(v))
+            }
+            None => Ok(None),
+        }
+    }
+
+    async fn find(&self, filter: &DocumentFilter) -> PersistenceResult<Vec<BaseDocument>> {
+        let query = filter_to_mongo(filter);
+        let mut cursor = self
+            .collection
+            .find(query)
+            .await
+            .map_err(|e| PersistenceError::Internal(format!("mongo find: {e}")))?;
+        let mut out = Vec::new();
+        while let Some(bson_doc) = cursor
+            .try_next()
+            .await
+            .map_err(|e| PersistenceError::Internal(format!("mongo cursor: {e}")))?
+        {
+            let v: BaseDocument = bson::from_bson(Bson::Document(bson_doc))
+                .map_err(|e| PersistenceError::Serialization(e.to_string()))?;
+            out.push(v);
+        }
+        Ok(out)
+    }
+
+    async fn update_one(
+        &self,
+        filter: &DocumentFilter,
+        update: DocumentUpdate,
+    ) -> PersistenceResult<UpdateResult> {
+        let query = filter_to_mongo(filter);
+        let update_doc = match update {
+            DocumentUpdate::Set { field, value } => doc! {
+                "$set": {
+                    field: bson::to_bson(&value)
+                        .map_err(|e| PersistenceError::Serialization(e.to_string()))?,
+                }
+            },
+            DocumentUpdate::Inc { field, by } => doc! {
+                "$inc": { field: by }
+            },
+        };
+        let result = self
+            .collection
+            .update_one(query, update_doc)
+            .await
+            .map_err(|e| PersistenceError::Internal(format!("mongo update_one: {e}")))?;
+        Ok(UpdateResult {
+            matched: result.matched_count,
+            modified: result.modified_count,
+        })
+    }
+
+    async fn delete_one(&self, filter: &DocumentFilter) -> PersistenceResult<DeleteResult> {
+        let query = filter_to_mongo(filter);
+        let result = self
+            .collection
+            .delete_one(query)
+            .await
+            .map_err(|e| PersistenceError::Internal(format!("mongo delete_one: {e}")))?;
+        Ok(DeleteResult {
+            deleted: result.deleted_count,
+        })
     }
 }
 

@@ -292,6 +292,16 @@ mod tests {
             async fn ping(&self) -> PersistenceResult<()> {
                 Ok(())
             }
+            async fn collection(
+                &self,
+                _name: &str,
+            ) -> PersistenceResult<
+                Arc<dyn crate::document::DocumentCollectionHandle>,
+            > {
+                Err(crate::error::PersistenceError::Internal(
+                    "stub handle has no collections".into(),
+                ))
+            }
         }
         let helper = DocumentStoreMigrationHelper::new(Arc::new(StubHandle));
         assert!(!helper.allow_migration);
@@ -305,6 +315,16 @@ mod tests {
         impl DocumentDatabaseHandle for StubHandle {
             async fn ping(&self) -> PersistenceResult<()> {
                 Ok(())
+            }
+            async fn collection(
+                &self,
+                _name: &str,
+            ) -> PersistenceResult<
+                Arc<dyn crate::document::DocumentCollectionHandle>,
+            > {
+                Err(crate::error::PersistenceError::Internal(
+                    "stub handle has no collections".into(),
+                ))
             }
         }
         let plan = Arc::new(MigrationPlan::new(vec![Arc::new(NoopStep)]));

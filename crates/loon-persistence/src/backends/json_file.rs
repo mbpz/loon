@@ -1,8 +1,8 @@
 use crate::error::{PersistenceError, PersistenceResult};
 use crate::{
-    BaseDocument, DeleteResult, Document, DocumentCollection, DocumentDatabase,
-    DocumentDatabaseHandle, DocumentFilter, DocumentLoader, DocumentUpdate, InsertResult,
-    UpdateResult,
+    BaseDocument, DeleteResult, Document, DocumentCollection, DocumentCollectionHandle,
+    DocumentDatabase, DocumentDatabaseHandle, DocumentFilter, DocumentLoader, DocumentUpdate,
+    InsertResult, UpdateResult,
 };
 use async_trait::async_trait;
 use parking_lot::RwLock;
@@ -34,6 +34,169 @@ impl DocumentDatabaseHandle for JsonFileDocumentDatabase {
     async fn ping(&self) -> PersistenceResult<()> {
         // Phase 1: no-op
         Ok(())
+    }
+
+    async fn collection(
+        &self,
+        name: &str,
+    ) -> PersistenceResult<Arc<dyn DocumentCollectionHandle>> {
+        let dir = self.root.join(name);
+        std::fs::create_dir_all(&dir)?;
+        let cache = Arc::new(RwLock::new(load_all_values_from_dir(&dir)?));
+        Ok(Arc::new(JsonFileCollectionHandle { dir, cache }))
+    }
+}
+
+fn load_all_values_from_dir(dir: &Path) -> PersistenceResult<HashMap<String, JsonValue>> {
+    let mut map = HashMap::new();
+    if !dir.exists() {
+        return Ok(map);
+    }
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        if path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.contains(".tmp"))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let bytes = std::fs::read(&path)?;
+        let value: JsonValue = match serde_json::from_slice(&bytes) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let id = value
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_string())
+            })
+            .unwrap_or_default();
+        if !id.is_empty() {
+            map.insert(id, value);
+        }
+    }
+    Ok(map)
+}
+
+/// Type-erased collection handle backed by the same on-disk format as
+/// [`JsonFileCollection`] but operating at the [`BaseDocument`] level.
+///
+/// Each document is persisted to `{dir}/{id}.json` via the same atomic
+/// temp + rename pattern, and the in-memory cache is the source of
+/// truth for queries.
+pub struct JsonFileCollectionHandle {
+    dir: PathBuf,
+    cache: Arc<RwLock<HashMap<String, JsonValue>>>,
+}
+
+#[async_trait]
+impl DocumentCollectionHandle for JsonFileCollectionHandle {
+    async fn insert_one(&self, doc: BaseDocument) -> PersistenceResult<()> {
+        let id = doc
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        if id.is_empty() {
+            return Err(PersistenceError::Internal(
+                "document missing 'id' field".into(),
+            ));
+        }
+        let bytes = serde_json::to_vec(&doc)?;
+        let path = self.dir.join(format!("{}.json", sanitize(&id)));
+        atomic_write(&path, &bytes)?;
+        self.cache.write().insert(id, doc);
+        Ok(())
+    }
+
+    async fn find_one(
+        &self,
+        filter: &DocumentFilter,
+    ) -> PersistenceResult<Option<BaseDocument>> {
+        Ok(self
+            .cache
+            .read()
+            .values()
+            .find(|d| matches_filter_value(d, filter))
+            .cloned())
+    }
+
+    async fn find(&self, filter: &DocumentFilter) -> PersistenceResult<Vec<BaseDocument>> {
+        Ok(self
+            .cache
+            .read()
+            .values()
+            .filter(|d| matches_filter_value(d, filter))
+            .cloned()
+            .collect())
+    }
+
+    async fn update_one(
+        &self,
+        filter: &DocumentFilter,
+        update: DocumentUpdate,
+    ) -> PersistenceResult<UpdateResult> {
+        let mut cache = self.cache.write();
+        let mut matched = 0u64;
+        let mut modified = 0u64;
+        let keys_to_update: Vec<String> = cache
+            .iter()
+            .filter(|(_, v)| matches_filter_value(v, filter))
+            .map(|(k, _)| k.clone())
+            .collect();
+        for k in keys_to_update {
+            matched += 1;
+            if let Some(doc) = cache.get_mut(&k) {
+                if apply_update(doc, &update) {
+                    modified += 1;
+                    let path = self.dir.join(format!("{}.json", sanitize(&k)));
+                    let bytes = serde_json::to_vec(&*doc)?;
+                    atomic_write(&path, &bytes)?;
+                }
+            }
+        }
+        Ok(UpdateResult { matched, modified })
+    }
+
+    async fn delete_one(&self, filter: &DocumentFilter) -> PersistenceResult<DeleteResult> {
+        let mut cache = self.cache.write();
+        let keys: Vec<String> = cache
+            .iter()
+            .filter(|(_, v)| matches_filter_value(v, filter))
+            .map(|(k, _)| k.clone())
+            .collect();
+        let mut deleted = 0u64;
+        for k in keys {
+            let path = self.dir.join(format!("{}.json", sanitize(&k)));
+            let _ = std::fs::remove_file(&path);
+            cache.remove(&k);
+            deleted += 1;
+        }
+        Ok(DeleteResult { deleted })
+    }
+}
+
+fn matches_filter_value(doc: &JsonValue, filter: &DocumentFilter) -> bool {
+    match filter {
+        DocumentFilter::Eq { field, value } => {
+            doc.get(field).cloned().unwrap_or(JsonValue::Null) == *value
+        }
+        DocumentFilter::In { field, values } => {
+            let v = doc.get(field).cloned().unwrap_or(JsonValue::Null);
+            values.contains(&v)
+        }
+        DocumentFilter::And(fs) => fs.iter().all(|f| matches_filter_value(doc, f)),
+        DocumentFilter::Or(fs) => fs.iter().any(|f| matches_filter_value(doc, f)),
+        DocumentFilter::Not(f) => !matches_filter_value(doc, f),
     }
 }
 
@@ -411,5 +574,125 @@ mod integration_tests {
             bytes_before, bytes_after,
             "on-disk file was modified despite the update failing"
         );
+    }
+
+    /// `DocumentDatabaseHandle::collection` returns a handle that
+    /// round-trips a base document through insert + find_one.
+    #[tokio::test]
+    async fn handle_round_trip() {
+        use crate::document::DocumentDatabaseHandle;
+
+        let dir = tempdir().unwrap();
+        let db = JsonFileDocumentDatabase::new(dir.path(), Duration::from_secs(1)).unwrap();
+        let handle = db.collection("items").await.unwrap();
+        let doc = serde_json::json!({"id": "x1", "name": "abc"});
+        handle.insert_one(doc.clone()).await.unwrap();
+        let found = handle
+            .find_one(&DocumentFilter::Eq {
+                field: "id".into(),
+                value: json!("x1"),
+            })
+            .await
+            .unwrap();
+        assert_eq!(found, Some(doc));
+    }
+
+    /// `find` returns every document matching the filter.
+    #[tokio::test]
+    async fn handle_find_filters_results() {
+        use crate::document::DocumentDatabaseHandle;
+
+        let dir = tempdir().unwrap();
+        let db = JsonFileDocumentDatabase::new(dir.path(), Duration::from_secs(1)).unwrap();
+        let handle = db.collection("items").await.unwrap();
+        handle
+            .insert_one(serde_json::json!({"id": "a", "kind": "k1"}))
+            .await
+            .unwrap();
+        handle
+            .insert_one(serde_json::json!({"id": "b", "kind": "k1"}))
+            .await
+            .unwrap();
+        handle
+            .insert_one(serde_json::json!({"id": "c", "kind": "k2"}))
+            .await
+            .unwrap();
+        let k1 = handle
+            .find(&DocumentFilter::Eq {
+                field: "kind".into(),
+                value: json!("k1"),
+            })
+            .await
+            .unwrap();
+        assert_eq!(k1.len(), 2);
+    }
+
+    /// `update_one` mutates and persists, and the result is visible
+    /// through a fresh handle (proving the on-disk file was rewritten).
+    #[tokio::test]
+    async fn handle_update_persists_across_reload() {
+        use crate::document::DocumentDatabaseHandle;
+
+        let dir = tempdir().unwrap();
+        let db = JsonFileDocumentDatabase::new(dir.path(), Duration::from_secs(1)).unwrap();
+        let handle = db.collection("items").await.unwrap();
+        handle
+            .insert_one(serde_json::json!({"id": "u1", "name": "old"}))
+            .await
+            .unwrap();
+        let r = handle
+            .update_one(
+                &DocumentFilter::Eq {
+                    field: "id".into(),
+                    value: json!("u1"),
+                },
+                DocumentUpdate::Set {
+                    field: "name".into(),
+                    value: json!("new"),
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(r.matched, 1);
+        assert_eq!(r.modified, 1);
+
+        // Drop original handle and re-open the collection: the on-disk
+        // file should contain the updated value.
+        drop(handle);
+        let handle2 = db.collection("items").await.unwrap();
+        let found = handle2
+            .find_one(&DocumentFilter::Eq {
+                field: "id".into(),
+                value: json!("u1"),
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.get("name").and_then(|v| v.as_str()), Some("new"));
+    }
+
+    /// `delete_one` removes the doc and the disk file.
+    #[tokio::test]
+    async fn handle_delete_removes_disk_file() {
+        use crate::document::DocumentDatabaseHandle;
+
+        let dir = tempdir().unwrap();
+        let db = JsonFileDocumentDatabase::new(dir.path(), Duration::from_secs(1)).unwrap();
+        let handle = db.collection("items").await.unwrap();
+        handle
+            .insert_one(serde_json::json!({"id": "d1"}))
+            .await
+            .unwrap();
+        let path = dir.path().join("items").join("d1.json");
+        assert!(path.exists());
+        let r = handle
+            .delete_one(&DocumentFilter::Eq {
+                field: "id".into(),
+                value: json!("d1"),
+            })
+            .await
+            .unwrap();
+        assert_eq!(r.deleted, 1);
+        assert!(!path.exists());
     }
 }

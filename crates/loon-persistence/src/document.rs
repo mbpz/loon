@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value as JsonValue;
 use std::hash::Hash;
+use std::sync::Arc;
 
 pub type BaseDocument = JsonValue;
 pub type DocumentLoader<T> = std::sync::Arc<dyn Fn(&BaseDocument) -> Option<T> + Send + Sync>;
@@ -46,12 +47,42 @@ pub enum DocumentUpdate {
 ///
 /// `DocumentDatabase::get_or_create_collection` is generic over the document
 /// type, so it cannot appear in a `dyn DocumentDatabase` vtable. Callers
-/// that need an opaque handle (such as the migration helper) use this
-/// trait object as the type-erased stand-in.
+/// that need an opaque handle (such as the migration helper, the SDK
+/// `ServerBuilder`, or the document-backed entity stores) use this
+/// trait object as the type-erased stand-in. Collection access works at
+/// the [`BaseDocument`] (= `serde_json::Value`) level so the trait stays
+/// dyn-compatible.
 #[async_trait]
 pub trait DocumentDatabaseHandle: Send + Sync {
     /// Lightweight reachability check.
     async fn ping(&self) -> PersistenceResult<()>;
+
+    /// Open (or lazily create) a named collection. Returns a
+    /// type-erased handle that operates at the `BaseDocument` level.
+    async fn collection(
+        &self,
+        name: &str,
+    ) -> PersistenceResult<Arc<dyn DocumentCollectionHandle>>;
+}
+
+/// Object-safe counterpart of [`DocumentCollection`]. Mirrors the core
+/// CRUD surface but using [`BaseDocument`] (= `serde_json::Value`) so
+/// the trait can be used through a `dyn` pointer. Each backend
+/// implements it independently of [`DocumentCollection<T>`].
+#[async_trait]
+pub trait DocumentCollectionHandle: Send + Sync {
+    async fn insert_one(&self, doc: BaseDocument) -> PersistenceResult<()>;
+    async fn find_one(
+        &self,
+        filter: &DocumentFilter,
+    ) -> PersistenceResult<Option<BaseDocument>>;
+    async fn find(&self, filter: &DocumentFilter) -> PersistenceResult<Vec<BaseDocument>>;
+    async fn update_one(
+        &self,
+        filter: &DocumentFilter,
+        update: DocumentUpdate,
+    ) -> PersistenceResult<UpdateResult>;
+    async fn delete_one(&self, filter: &DocumentFilter) -> PersistenceResult<DeleteResult>;
 }
 
 #[async_trait]
