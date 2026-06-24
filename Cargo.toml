@@ -54,7 +54,7 @@ tower-http = { version = "0.6", features = ["cors", "trace"] }
 clap = { version = "4", features = ["derive"] }
 dialoguer = "0.11"
 console = "0.15"
-toml = "0.8"
+toml = "1.1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 jsonschema = "0.18"
 async-stream = "0.3"
