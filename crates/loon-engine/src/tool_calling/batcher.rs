@@ -167,9 +167,22 @@ impl ToolCaller for DefaultToolCallBatcher {
                     crate::error::EngineError::ToolCallFailed(tool_id.clone(), e.to_string())
                 })?;
 
+            // Construct an invocation-scoped `ToolContext` from the
+            // engine context so handlers registered via
+            // `LocalToolService::register_handler_with_context` can
+            // see which session / agent / customer they're running
+            // for. Services without a context-aware handler will
+            // transparently fall back to the plain handler via the
+            // default `ToolService::call_tool_with_context` impl.
+            let tool_ctx = loon_core::ToolContext {
+                agent_id: ctx.agent.id.clone(),
+                session_id: ctx.session.id.clone(),
+                customer_id: Some(ctx.customer.id.clone()),
+            };
+
             // Invoke.
             let result = service
-                .call_tool(tool_id, args)
+                .call_tool_with_context(tool_id, args, tool_ctx)
                 .await
                 .map_err(|e| {
                     crate::error::EngineError::ToolCallFailed(tool_id.clone(), e.to_string())

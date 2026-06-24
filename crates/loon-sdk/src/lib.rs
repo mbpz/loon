@@ -13,13 +13,11 @@
 pub mod error;
 pub mod server;
 pub mod tags;
-pub mod tool_context;
 pub mod variable;
 
 pub use error::*;
 pub use server::*;
 pub use tags::*;
-pub use tool_context::*;
 pub use variable::*;
 
 // Re-export core types as SDK handles so downstream users can write
