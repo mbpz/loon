@@ -15,7 +15,8 @@ use tokio::runtime::Runtime;
 
 use loon_core::{
     Agent, AgentId, Criticality, Guideline, GuidelineContent, GuidelineId, Relationship,
-    RelationshipEntity, RelationshipEntityKind, RelationshipId, Session, SessionId, SessionMode,
+    RelationshipEntity, RelationshipEntityKind, RelationshipId, RelationshipKind,
+    Session, SessionId, SessionMode,
 };
 use loon_core::entity_cq::{EntityCommands, EntityQueries};
 use loon_core::stores::in_memory::InMemoryRelationshipStore;
@@ -180,32 +181,12 @@ fn bench_engine_context_construction(c: &mut Criterion) {
 
 fn bench_relational_resolver(c: &mut Criterion) {
     let runtime = Runtime::new().unwrap();
-    let store = InMemoryRelationshipStore::new();
-    let resolver = RelationalResolver::new(
-        store.clone() as Arc<dyn RelationshipStore>,
-    );
-
-    use loon_core::stores::RelationshipStore;
-    let rel_store: Arc<dyn RelationshipStore> = Arc::new(InMemoryRelationshipStore::new());
-    let resolver = RelationalResolver::new(rel_store);
+    let store: Arc<dyn RelationshipStore> = Arc::new(InMemoryRelationshipStore::new());
+    let resolver = RelationalResolver::new(store.clone());
 
     let mut handles = Vec::new();
     for _ in 0..100 {
-        let g = Guideline {
-            id: GuidelineId::new(),
-            agent_id: AgentId::new(),
-            content: GuidelineContent {
-                condition: "user asks for x".into(),
-                action: "do x".into(),
-                description: None,
-            },
-            criticality: Criticality::Low,
-            enabled: true,
-            tags: vec![],
-            creation_utc: chrono::Utc::now(),
-            metadata: serde_json::Value::Null,
-        };
-        handles.push(g.id.clone());
+        handles.push(GuidelineId::new());
     }
     for i in 0..50 {
         let rel = Relationship {
