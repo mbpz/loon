@@ -126,11 +126,14 @@ impl PromptBuilder {
             sections.push(s);
         }
 
-        // 9. Recent conversation
+        // 9. Recent conversation (last up to 10 messages)
         let messages = interaction.messages();
-        if !messages.is_empty() {
+        let history_section = |take: usize| -> Option<String> {
+            if messages.is_empty() || take == 0 {
+                return None;
+            }
             let mut s = String::from("Recent conversation:\n");
-            for m in messages.iter().rev().take(10).rev() {
+            for m in messages.iter().rev().take(take).rev() {
                 let speaker = match m.source {
                     loon_core::EventSource::Customer => "Customer",
                     loon_core::EventSource::AiAgent => "Agent",
@@ -138,6 +141,11 @@ impl PromptBuilder {
                 };
                 s.push_str(&format!("  {}: {}\n", speaker, m.content));
             }
+            Some(s)
+        };
+        let history_index = sections.len();
+        let initial_take = messages.len().min(10);
+        if let Some(s) = history_section(initial_take) {
             sections.push(s);
         }
 
@@ -147,14 +155,40 @@ impl PromptBuilder {
                 .into(),
         );
 
-        let prompt = sections.join("\n\n");
+        let mut prompt = sections.join("\n\n");
 
-        // Token budget check (best-effort; if over budget we just
-        // warn for now — a future iteration will truncate the
-        // conversation history first).
-        let tokens = self.tokenizer.count_tokens(&prompt).await.unwrap_or(0);
-        if (tokens as usize) > self.max_tokens {
-            tracing::warn!("prompt over token budget: {} > {}", tokens, self.max_tokens);
+        // Token budget enforcement: if over max_tokens, progressively
+        // drop the oldest messages from the conversation history
+        // section. If even an empty history is over budget, remove
+        // the history section entirely. We still emit the prompt —
+        // a truncated prompt is preferable to refusing to respond.
+        let mut tokens = self.tokenizer.count_tokens(&prompt).await.unwrap_or(0);
+        if (tokens as usize) > self.max_tokens && !messages.is_empty() {
+            tracing::warn!(
+                "prompt over token budget: {} > {}, truncating history",
+                tokens,
+                self.max_tokens
+            );
+            let mut take = initial_take;
+            while (tokens as usize) > self.max_tokens && take > 0 {
+                take -= 1;
+                match history_section(take) {
+                    Some(s) => sections[history_index] = s,
+                    None => {
+                        sections.remove(history_index);
+                        break;
+                    }
+                }
+                prompt = sections.join("\n\n");
+                tokens = self.tokenizer.count_tokens(&prompt).await.unwrap_or(0);
+            }
+            if (tokens as usize) > self.max_tokens {
+                tracing::warn!(
+                    "prompt still over token budget after truncation: {} > {}",
+                    tokens,
+                    self.max_tokens
+                );
+            }
         }
 
         Ok(prompt)
@@ -342,6 +376,39 @@ mod tests {
         assert!(
             p.contains("monthly recurring revenue"),
             "missing term description: {p}"
+        );
+    }
+
+    #[tokio::test]
+    async fn prompt_truncates_when_over_budget() {
+        // Small budget: WsTok counts whitespace-separated tokens, so
+        // a 100-token budget is easily exceeded by ~20 messages.
+        let pb = PromptBuilder::new(Arc::new(WsTok), 100);
+        let mut events = Vec::new();
+        for i in 0..20 {
+            let src = if i % 2 == 0 {
+                EventSource::Customer
+            } else {
+                EventSource::AiAgent
+            };
+            events.push(mk_message_event(
+                src,
+                "this is a fairly long message that contributes many tokens to the prompt",
+            ));
+        }
+        let interaction = Interaction::new(events);
+        let prompt = pb
+            .build_prompt(&agent(), &interaction, &[], &[], &[], &[], None, &[], &[])
+            .await
+            .unwrap();
+        // Either we dropped enough messages to fit the budget, or
+        // the budget is unsatisfiable even with no history; in the
+        // latter case the history section must be empty/absent.
+        let tokens = prompt.split_whitespace().count();
+        let has_history_header = prompt.contains("Recent conversation:");
+        assert!(
+            tokens <= 100 || !has_history_header,
+            "expected truncation to keep tokens<=100 or drop history; got tokens={tokens}, has_history={has_history_header}, prompt=\n{prompt}"
         );
     }
 

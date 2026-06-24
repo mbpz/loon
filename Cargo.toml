@@ -25,8 +25,12 @@ loon-sdk = { path = "crates/loon-sdk" }
 loon-core = { path = "crates/loon-core" }
 loon-persistence = { path = "crates/loon-persistence" }
 loon-nlp = { path = "crates/loon-nlp" }
+loon-server = { path = "crates/loon-server" }
 tokio = { workspace = true }
 tempfile = "3"
+tokio-tungstenite = "0.23"
+futures = { workspace = true }
+axum = { workspace = true }
 
 [workspace.package]
 version = "0.1.0"
