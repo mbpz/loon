@@ -4,9 +4,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use loon_core::SessionId;
 use loon_nlp::NlpService;
 
 use crate::engine::Engine;
+use crate::engine_context::{Context, NoopEmitter};
 use crate::error::EngineResult;
 
 use super::views::{EngineHealthView, EventLoopHealthView, NlpHealthView};
@@ -50,10 +52,12 @@ impl HealthReporter {
 
     /// Aggregate health: builds a [`ComponentHealth`] entry for each
     /// subsystem (engine, NLP, event loop). A component is considered
-    /// `ok` when its view-fetch resolves; any error flips both the
-    /// component and the aggregate to `ok = false`. Phase 1 always
-    /// reports a positive baseline because the underlying views are
-    /// static — but the shape is what `/health` consumers depend on.
+    /// `ok` when its view-fetch resolves *and* the inner `status`
+    /// string is `"ok"`; any error or non-ok status flips both the
+    /// component and the aggregate to `ok = false`. The check
+    /// dynamically probes each subsystem via its view fetcher so that
+    /// future failure modes (e.g. an engine that starts returning Err
+    /// from a liveness call) propagate without further plumbing.
     pub async fn check(&self) -> EngineResult<HealthStatus> {
         let engine = match self.engine_view().await {
             Ok(v) => ComponentHealth {
@@ -96,11 +100,22 @@ impl HealthReporter {
         Ok(HealthStatus { ok, components })
     }
 
-    /// Engine-side view. The [`Engine`] trait does not currently
-    /// expose runtime metrics; we report a static "alive" indicator
-    /// derived from the fact that we hold an `Arc<dyn Engine>` and
-    /// expose it for future metric plumbing.
+    /// Engine-side view. Dynamically probes the engine by invoking
+    /// `utter` with an empty `requests` slice — a no-op call that
+    /// engines should always accept. If the engine returns `Err`, we
+    /// propagate it so `check()` can flip the aggregate to `ok =
+    /// false`. The reported `status` string mirrors the probe outcome.
     pub async fn engine_view(&self) -> EngineResult<EngineHealthView> {
+        let probe_ctx = Context {
+            session_id: SessionId::new(),
+            agent_id: loon_core::AgentId::new(),
+        };
+        let emitter = NoopEmitter;
+        // Empty `requests` slice — the engine should treat this as a
+        // no-op and return `false` (nothing emitted). Surfaces any
+        // panic/error path as a health failure.
+        self.engine.utter(&probe_ctx, &emitter, &[]).await?;
+
         let mut metrics: HashMap<String, String> = HashMap::new();
         // `Arc::strong_count` is a cheap, non-load-bearing liveness
         // signal — it proves the engine handle is still wired into
@@ -330,5 +345,51 @@ mod tests {
         assert!(names.contains(&"engine"));
         assert!(names.contains(&"nlp"));
         assert!(names.contains(&"event_loop"));
+    }
+
+    /// When the engine's liveness probe fails, the aggregate status
+    /// must report `ok = false` and the `engine` component entry must
+    /// carry the failure detail. Guards Item 7 of the final review.
+    #[tokio::test]
+    async fn check_returns_false_when_engine_view_fails() {
+        struct BrokenEngine;
+        #[async_trait]
+        impl Engine for BrokenEngine {
+            async fn process(&self, _: &Context, _: &dyn EventEmitter) -> EngineResult<bool> {
+                Err(crate::error::EngineError::HookBail)
+            }
+            async fn utter(
+                &self,
+                _: &Context,
+                _: &dyn EventEmitter,
+                _: &[UtteranceRequest],
+            ) -> EngineResult<bool> {
+                Err(crate::error::EngineError::HookBail)
+            }
+        }
+
+        let nlp_cfg = NlpConfig {
+            provider: "openai".into(),
+            model: "gpt-4o-mini".into(),
+            endpoint: None,
+            api_key: "x".into(),
+            max_retries: 0,
+            timeout: std::time::Duration::from_secs(1),
+            temperature: 0.0,
+        };
+        let reporter = HealthReporter::new(Arc::new(BrokenEngine), Arc::new(CfgNlp(nlp_cfg)));
+
+        let status = reporter.check().await.unwrap();
+        assert!(!status.ok, "aggregate status must be false when engine probe fails");
+        let engine = status
+            .components
+            .iter()
+            .find(|c| c.name == "engine")
+            .expect("engine component present");
+        assert!(!engine.ok, "engine component must be ok=false");
+        assert!(engine.detail.is_some(), "failure detail attached");
+        // Other components remain ok — only engine flipped.
+        let nlp = status.components.iter().find(|c| c.name == "nlp").unwrap();
+        assert!(nlp.ok);
     }
 }
