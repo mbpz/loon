@@ -14,7 +14,7 @@ parking_lot = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
 mongodb = "3"
-bson = "2"
+bson = "3"
 reqwest = { workspace = true }
 qdrant-client = "1.12"
 tokio = { workspace = true }
