@@ -102,20 +102,34 @@ impl MessageGenerator {
 
     /// Streaming composition: returns a stream of text chunks
     /// emitted token-by-token. Phase 1 reuses the fluid composition
-    /// path to materialise a single text payload and surfaces it
-    /// as a one-element stream. A future phase will hook the
-    /// [`NlpService::text_generator`] for true token streaming.
+    /// path to materialise a single text payload, then splits it
+    /// into whitespace-bounded word chunks so consumers see a
+    /// best-effort token stream rather than a single monolithic
+    /// payload. The split is `split_inclusive(' ')`, which preserves
+    /// the trailing space on every chunk except the final word —
+    /// concatenating the chunks reconstructs the original string.
+    /// A future phase will hook the [`NlpService::text_generator`]
+    /// for true upstream token streaming.
     pub async fn generate_streaming(
         &self,
         ctx: &EngineContext,
     ) -> EngineResult<Pin<Box<dyn Stream<Item = EngineResult<String>> + Send>>> {
-        let text = self
+        let full_text = self
             .generate_fluid_message(ctx)
             .await?
-            .first()
-            .map(|m| m.message.clone())
+            .into_iter()
+            .next()
+            .map(|m| m.message)
             .unwrap_or_default();
-        let s = stream::iter(vec![Ok(text)]);
+        let chunks: Vec<String> = if full_text.is_empty() {
+            Vec::new()
+        } else {
+            full_text
+                .split_inclusive(' ')
+                .map(|s| s.to_string())
+                .collect()
+        };
+        let s = stream::iter(chunks.into_iter().map(Ok));
         Ok(Box::pin(s))
     }
 }
@@ -304,5 +318,116 @@ mod tests {
         // wiring reaches the LLM service).
         let msgs = gen.generate_fluid_message(&ctx).await.unwrap();
         assert_eq!(msgs.len(), 1);
+    }
+
+    /// Backed by an `ErasedSchematicGenerator` that returns a fixed
+    /// `{"reply": "..."}` JSON payload, so `generate_fluid_message`
+    /// surfaces the canned reply verbatim. The streaming tests use
+    /// this to assert the chunk-emission shape without depending on
+    /// a real LLM.
+    struct CannedReplyNlp {
+        reply: String,
+        config: NlpConfig,
+    }
+
+    impl CannedReplyNlp {
+        fn new(reply: &str) -> Self {
+            Self {
+                reply: reply.to_string(),
+                config: NlpConfig {
+                    provider: "fake".into(),
+                    model: "fake".into(),
+                    endpoint: None,
+                    api_key: String::new(),
+                    max_retries: 0,
+                    timeout: std::time::Duration::from_secs(1),
+                    temperature: 0.0,
+                },
+            }
+        }
+    }
+
+    struct CannedReplyGen {
+        reply: String,
+    }
+
+    #[async_trait]
+    impl loon_nlp::ErasedSchematicGenerator for CannedReplyGen {
+        async fn generate(
+            &self,
+            _prompt: String,
+            _options: loon_nlp::SchematicGenerationOptions,
+        ) -> loon_nlp::NlpResult<loon_nlp::ErasedSchematicGenerationResult> {
+            Ok(loon_nlp::ErasedSchematicGenerationResult {
+                value: serde_json::json!({ "reply": self.reply }),
+                info: loon_nlp::GenerationInfo::default(),
+            })
+        }
+    }
+
+    #[async_trait]
+    impl NlpService for CannedReplyNlp {
+        fn config(&self) -> &NlpConfig {
+            &self.config
+        }
+        async fn text_generator(&self) -> NlpResult<Box<dyn StreamingTextGenerator>> {
+            unimplemented!()
+        }
+        async fn schematic_generator(
+            &self,
+            _: serde_json::Value,
+        ) -> NlpResult<Box<dyn loon_nlp::ErasedSchematicGenerator>> {
+            Ok(Box::new(CannedReplyGen {
+                reply: self.reply.clone(),
+            }))
+        }
+        async fn embedder(&self) -> NlpResult<Box<dyn Embedder>> {
+            unimplemented!()
+        }
+        async fn tokenizer(&self) -> NlpResult<Box<dyn Tokenizer>> {
+            unimplemented!()
+        }
+        async fn moderater(&self) -> NlpResult<Box<dyn Moderater>> {
+            unimplemented!()
+        }
+    }
+
+    fn mk_gen_with_reply(reply: &str) -> MessageGenerator {
+        let nlp: Arc<dyn NlpService> = Arc::new(CannedReplyNlp::new(reply));
+        let tok: Arc<dyn Tokenizer> = Arc::new(WsTok);
+        let pb = Arc::new(PromptBuilder::new(tok, 1000));
+        let crg = Arc::new(CannedResponseGenerator::new(nlp.clone()));
+        MessageGenerator::new(nlp, pb, crg)
+    }
+
+    #[tokio::test]
+    async fn generate_streaming_emits_word_chunks() {
+        use futures::StreamExt;
+        let gen = mk_gen_with_reply("hello world from loon");
+        let ctx = mk_ctx();
+        let mut stream = gen.generate_streaming(&ctx).await.unwrap();
+        let mut chunks = Vec::new();
+        while let Some(c) = stream.next().await {
+            chunks.push(c.unwrap());
+        }
+        assert_eq!(chunks, vec!["hello ", "world ", "from ", "loon"]);
+        // Concatenation must reconstruct the original payload — a
+        // useful invariant for downstream code that re-assembles the
+        // streamed text.
+        assert_eq!(chunks.concat(), "hello world from loon");
+    }
+
+    #[tokio::test]
+    async fn generate_streaming_handles_empty_message() {
+        use futures::StreamExt;
+        let gen = mk_gen_with_reply("");
+        let ctx = mk_ctx();
+        let mut stream = gen.generate_streaming(&ctx).await.unwrap();
+        let mut count = 0;
+        while let Some(c) = stream.next().await {
+            let _ = c.unwrap();
+            count += 1;
+        }
+        assert_eq!(count, 0, "empty reply should produce an empty stream");
     }
 }

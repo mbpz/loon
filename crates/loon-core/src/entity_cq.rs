@@ -285,8 +285,18 @@ pub struct EntityCommands {
 }
 
 impl EntityCommands {
-    pub async fn update_session(&self, id: &SessionId, p: SessionUpdateParams) -> CoreResult<()> {
-        self.session_store.update(id, p).await.map(|_| ())
+    /// Update a session's mutable fields and return the freshly
+    /// persisted [`Session`]. Returning the updated entity lets
+    /// route handlers and tool-context callers avoid a second
+    /// `session_store.read` after every patch — the underlying
+    /// store already builds the post-write snapshot, so forwarding
+    /// it is free.
+    pub async fn update_session(
+        &self,
+        id: &SessionId,
+        p: SessionUpdateParams,
+    ) -> CoreResult<Session> {
+        self.session_store.update(id, p).await
     }
 
     pub async fn update_context_variable_value(

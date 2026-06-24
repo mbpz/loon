@@ -101,9 +101,8 @@ pub async fn update_session(
     let sid = SessionId(id.clone());
     let updated = s
         .server
-        .queries
-        .session_store
-        .update(
+        .commands
+        .update_session(
             &sid,
             SessionUpdateParams {
                 title: req.title,
@@ -208,5 +207,55 @@ mod tests {
 
         let read_missing = read_session(Path(id), State(state)).await;
         assert!(matches!(read_missing, Err(ApiError::NotFound(_, _))));
+    }
+
+    /// Regression test for the CQ-separation fix: `update_session`
+    /// must route writes through `Server::commands` (not directly
+    /// through `queries.session_store.update`). The visible
+    /// behaviour we assert is twofold: (1) the response body
+    /// reflects the new title; (2) reading the session back via the
+    /// queries graph also reflects the new title — confirming the
+    /// write actually landed in the underlying store even though it
+    /// went through `EntityCommands`.
+    #[tokio::test]
+    async fn update_session_routes_through_entity_commands() {
+        let state = test_app_state().await;
+        let agent_id = AgentId::new();
+        let created = create_session(
+            State(state.clone()),
+            Json(CreateSessionRequest {
+                agent_id,
+                customer_id: None,
+                title: Some("orig".into()),
+            }),
+        )
+        .await
+        .expect("create ok");
+        let id = created.data.id.0.clone();
+
+        let updated = update_session(
+            Path(id.clone()),
+            State(state.clone()),
+            Json(UpdateSessionRequest {
+                title: Some("new".into()),
+                mode: None,
+            }),
+        )
+        .await
+        .expect("update ok");
+        assert_eq!(updated.data.title.as_deref(), Some("new"));
+
+        // The write must be observable through the queries graph —
+        // proving the commands-side handle and the queries-side handle
+        // share the same store, and that nothing was skipped.
+        let read_back = state
+            .server
+            .queries
+            .session_store
+            .read(&SessionId(id))
+            .await
+            .expect("read ok")
+            .expect("session exists");
+        assert_eq!(read_back.title.as_deref(), Some("new"));
     }
 }
