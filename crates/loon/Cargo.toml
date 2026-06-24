@@ -21,4 +21,4 @@ anyhow = { workspace = true }
 dialoguer = { workspace = true }
 console = { workspace = true }
 futures = { workspace = true }
-tokio-tungstenite = "0.23"
+tokio-tungstenite = "0.29"
