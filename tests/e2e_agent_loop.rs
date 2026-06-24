@@ -184,3 +184,48 @@ async fn e2e_ws_chat_connects_and_accepts_message() {
     // without the server panicking.
     drop(ws);
 }
+
+/// End-to-end: wiremock-served OpenAI-shaped endpoint feeds through
+/// the real `OpenAiSchematicGenerator`. Locks down that the
+/// provider's HTTP wiring (URL composition, headers, JSON parsing,
+/// schematic deserialization) actually round-trips against a real
+/// HTTP server, just without burning real provider credits / quotas.
+#[tokio::test]
+async fn e2e_openai_provider_parses_response() {
+    use loon_nlp::providers::openai::OpenAiSchematicGenerator;
+    use loon_nlp::{define_schematic, NlpConfig, SchematicGenerator};
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    define_schematic! {
+        pub struct TestReply { pub reply: String }
+    }
+
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"choices":[{"message":{"content":"{\"reply\":\"Hello from mocked LLM\"}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
+        ))
+        .mount(&server)
+        .await;
+
+    let config = Arc::new(NlpConfig {
+        provider: "openai".into(),
+        model: "gpt-4o-mini".into(),
+        endpoint: Some(server.uri()),
+        api_key: "test-key".into(),
+        max_retries: 0,
+        timeout: Duration::from_secs(5),
+        temperature: 0.2,
+    });
+
+    let generator = OpenAiSchematicGenerator::<TestReply>::new(config);
+    let result = generator
+        .generate("hello".into(), Default::default())
+        .await
+        .expect("schematic generation succeeds against wiremock");
+    assert_eq!(result.value.reply, "Hello from mocked LLM");
+    assert_eq!(result.info.model, "gpt-4o-mini");
+    assert_eq!(result.info.total_tokens, 2);
+}
