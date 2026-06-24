@@ -255,7 +255,7 @@ impl ServerBuilder {
 
         let engine = Arc::new(AlphaEngine {
             queries: queries.clone(),
-            commands,
+            commands: commands.clone(),
             matcher,
             tool_caller,
             planner,
@@ -268,7 +268,11 @@ impl ServerBuilder {
             nlp,
         });
 
-        Ok(Server { engine, queries })
+        Ok(Server {
+            engine,
+            queries,
+            commands,
+        })
     }
 }
 
@@ -286,6 +290,7 @@ impl Default for ServerBuilder {
 pub struct Server {
     pub engine: Arc<dyn Engine>,
     pub queries: Arc<loon_core::entity_cq::EntityQueries>,
+    pub commands: Arc<loon_core::entity_cq::EntityCommands>,
 }
 
 impl Server {
