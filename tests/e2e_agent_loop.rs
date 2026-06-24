@@ -118,3 +118,69 @@ async fn e2e_data_persists_across_server_rebuilds() {
     );
     assert_eq!(agent.unwrap().name, "crash-resistant");
 }
+
+/// End-to-end: open a WebSocket against `/v1/sessions/:id/chat`, send
+/// a `user_message` frame, and confirm the server accepts the upgrade
+/// + frame without crashing. Full streaming verification (waiting
+/// for `agent_message` + `done`) is intentionally out of scope here
+/// because `FakeNlpService` does not emit message events; the goal
+/// of this test is to lock down the WS wiring at the transport level.
+#[tokio::test]
+async fn e2e_ws_chat_connects_and_accepts_message() {
+    use futures::SinkExt;
+    use tokio_tungstenite::tungstenite::Message as WsMessage;
+
+    let queries = loon_core::entity_cq::EntityQueries::in_memory();
+    let agent = loon_core::Agent::new("ws-test", "x");
+    let agent_id = agent.id.clone();
+    queries.agent_store.create(agent).await.unwrap();
+    let session = loon_core::Session::new(&agent_id);
+    let sid = session.id.clone();
+    queries.session_store.create(session).await.unwrap();
+
+    let nlp: Arc<dyn loon_nlp::NlpService> = Arc::new(FakeNlpService::new());
+    let server = std::sync::Arc::new(
+        p::Server::builder()
+            .with_nlp_service(nlp)
+            .with_entity_queries(queries)
+            .build()
+            .await
+            .unwrap(),
+    );
+    let state = std::sync::Arc::new(loon_server::app::AppState {
+        server,
+        auth: std::sync::Arc::new(loon_server::auth::NoopAuthProvider),
+        rate_limiter: std::sync::Arc::new(loon_server::middleware::rate_limit::RateLimiter::new(
+            loon_server::middleware::rate_limit::RateLimitConfig::default(),
+        )),
+    });
+    let app = loon_server::app::router(state);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+
+    // Give the server a moment to be ready before we connect.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    let url = format!("ws://{}/v1/sessions/{}/chat", addr, sid.0);
+    let (mut ws, _resp) = tokio_tungstenite::connect_async(&url)
+        .await
+        .expect("ws connect");
+    ws.send(WsMessage::Text(
+        r#"{"type":"user_message","content":"hi"}"#.into(),
+    ))
+    .await
+    .expect("send user_message");
+    // Drop the connection — we don't require any specific server
+    // frame here; the test passes if the upgrade + send completed
+    // without the server panicking.
+    drop(ws);
+}
