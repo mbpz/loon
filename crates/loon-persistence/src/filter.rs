@@ -1,6 +1,20 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+/// AST for document-level queries. Backends translate this into
+/// their native query language.
+///
+/// # Example
+///
+/// ```
+/// # use loon_persistence::DocumentFilter;
+/// # use serde_json::json;
+/// let f = DocumentFilter::And(vec![
+///     DocumentFilter::Eq { field: "status".into(), value: json!("active") },
+///     DocumentFilter::Eq { field: "priority".into(), value: json!(1) },
+/// ]);
+/// assert!(matches!(f, DocumentFilter::And(_)));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "op", content = "args")]
 pub enum DocumentFilter {

@@ -9,6 +9,17 @@ use crate::engine_context::Context;
 use crate::error::EngineResult;
 
 /// A request to utter a specific action and rationale.
+///
+/// # Example
+///
+/// ```
+/// # use loon_engine::UtteranceRequest;
+/// let request = UtteranceRequest {
+///     action: "say_hello".into(),
+///     rationale: "user greeted us".into(),
+/// };
+/// assert_eq!(request.action, "say_hello");
+/// ```
 #[derive(Debug, Clone)]
 pub struct UtteranceRequest {
     pub action: String,

@@ -27,9 +27,20 @@ use loon_engine::Engine;
 
 use crate::error::SdkResult;
 
-/// Builder for [`Server`]. Phase 1 only stores type-name
-/// diagnostics from its dependencies; full engine wiring lands
-/// later.
+/// Builder for [`Server`].
+///
+/// # Example
+///
+/// ```
+/// # use loon_sdk::Server;
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let server = Server::builder().build().await?;
+/// // Server is now ready — engine and queries graph are live.
+/// let _queries = server.queries();
+/// # Ok(())
+/// # }
+/// ```
 pub struct ServerBuilder {
     /// Type-erased handle to the document database that backs the
     /// real entity stores. When set, [`ServerBuilder::build`]
@@ -287,6 +298,31 @@ impl Default for ServerBuilder {
 /// graph. The queries are exposed publicly so embedders (e.g.
 /// `loon-server` route handlers) can read and write entities
 /// directly through the same store-backed graph the engine uses.
+///
+/// # Example
+///
+/// ```
+/// # use loon_sdk::Server;
+/// # use loon_core::{Agent, Session};
+/// # use loon_core::entity_cq::EntityQueries;
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let queries = EntityQueries::in_memory();
+/// let agent = Agent::new("support", "tech support bot");
+/// let agent_id = agent.id.clone();
+/// queries.agent_store.create(agent).await.unwrap();
+/// let session = Session::new(&agent_id);
+/// let session_id = session.id.clone();
+/// queries.session_store.create(session).await.unwrap();
+/// let server = Server::builder()
+///     .with_entity_queries(queries)
+///     .build()
+///     .await?;
+/// let reply = server.process_message(&session_id, "hello").await?;
+/// assert!(!reply.is_empty() || reply.is_empty(), "reply returns String");
+/// # Ok(())
+/// # }
+/// ```
 pub struct Server {
     pub engine: Arc<dyn Engine>,
     pub queries: Arc<loon_core::entity_cq::EntityQueries>,

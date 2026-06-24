@@ -12,6 +12,17 @@ use loon_core::TagId;
 /// Tag filter that matches when the stored entity carries *any* of
 /// the listed tags. Wraps a `Vec<TagId>` with the matching semantic
 /// encoded in the type.
+///
+/// # Example
+///
+/// ```
+/// # use loon_core::TagId;
+/// # use loon_sdk::AnyOf;
+/// let a = TagId::new();
+/// let b = TagId::new();
+/// let f = AnyOf::new([a.clone(), b.clone()]);
+/// assert_eq!(f.len(), 2);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnyOf(pub Vec<TagId>);
 
@@ -47,6 +58,17 @@ impl IntoIterator for AnyOf {
 /// Tag filter that matches when the stored entity carries *all* of
 /// the listed tags. Wraps a `Vec<TagId>` with the matching semantic
 /// encoded in the type.
+///
+/// # Example
+///
+/// ```
+/// # use loon_core::TagId;
+/// # use loon_sdk::AllOf;
+/// let a = TagId::new();
+/// let b = TagId::new();
+/// let f = AllOf::new([a.clone(), b.clone()]);
+/// assert_eq!(f.len(), 2);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AllOf(pub Vec<TagId>);
 

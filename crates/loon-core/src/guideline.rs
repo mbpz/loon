@@ -9,6 +9,22 @@ pub struct GuidelineContent {
     pub description: Option<String>,
 }
 
+/// A behavioural rule bound to an agent.
+///
+/// # Example
+///
+/// ```
+/// # use loon_core::{AgentId, Guideline, GuidelineContent};
+/// let content = GuidelineContent {
+///     condition: "user.plan == 'premium'".into(),
+///     action: "route_to_premium_support".into(),
+///     description: Some("premium customer routing".into()),
+/// };
+/// let agent_id = AgentId::new();
+/// let g = Guideline::new(content, &agent_id, true, 2);
+/// assert!(g.enabled);
+/// assert_eq!(g.criticality, loon_core::Criticality::High);
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Guideline {
     pub id: GuidelineId,

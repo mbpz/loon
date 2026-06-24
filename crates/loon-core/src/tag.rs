@@ -2,6 +2,15 @@ use crate::{AgentId, CustomerId, GuidelineId, JourneyId, SessionId, TagId, ToolI
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// A label that can be attached to entities for filtering.
+///
+/// # Example
+///
+/// ```
+/// # use loon_core::Tag;
+/// let tag = Tag::new("urgent");
+/// assert_eq!(tag.name, "urgent");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Tag {
     pub id: TagId,

@@ -10,6 +10,23 @@ pub enum ToolKind {
     MCP,
 }
 
+/// A registrable tool the engine can invoke.
+///
+/// # Example
+///
+/// ```
+/// # use loon_core::{Tool, ToolId, ToolKind};
+/// let tool = Tool {
+///     id: ToolId::new(),
+///     name: "search_kb".into(),
+///     description: "search the knowledge base".into(),
+///     parameters_schema: serde_json::Value::Null,
+///     kind: ToolKind::Local,
+///     creation_utc: chrono::Utc::now(),
+/// };
+/// assert_eq!(tool.name, "search_kb");
+/// assert_eq!(tool.kind, ToolKind::Local);
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Tool {
     pub id: ToolId,

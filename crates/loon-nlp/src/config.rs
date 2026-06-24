@@ -34,6 +34,25 @@ impl Provider {
     }
 }
 
+/// Configuration for the NLP backend, typically loaded from the
+/// environment via [`NlpConfig::from_env`].
+///
+/// # Example
+///
+/// ```
+/// # use loon_nlp::NlpConfig;
+/// # use std::time::Duration;
+/// let config = NlpConfig {
+///     provider: "openai".into(),
+///     model: "gpt-4o-mini".into(),
+///     endpoint: None,
+///     api_key: "sk-test".into(),
+///     max_retries: 3,
+///     timeout: Duration::from_secs(60),
+///     temperature: 0.2,
+/// };
+/// assert_eq!(config.provider, "openai");
+/// ```
 pub struct NlpConfig {
     pub provider: String,
     pub model: String,

@@ -16,6 +16,15 @@ pub enum MessageOutputMode {
     Canned,
 }
 
+/// An agent (bot persona) that the engine drives.
+///
+/// # Example
+///
+/// ```
+/// # use loon_core::Agent;
+/// let agent = Agent::new("support", "helps users with technical questions");
+/// assert_eq!(agent.name, "support");
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Agent {
     pub id: AgentId,
