@@ -22,6 +22,6 @@ jobs:
       - name: Unit test
         run: cargo test --workspace
       - name: Doc test
-        run: cargo test --doc
+        run: cargo test --doc -p loon-core -p loon-sdk -p loon-engine -p loon-emission -p loon-persistence -p loon-nlp -p loon-app-modules -p loon-server -p loon
       - name: Doc (no-deps)
         run: cargo doc --workspace --no-deps
