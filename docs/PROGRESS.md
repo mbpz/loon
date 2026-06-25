@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-25 (final)
 **Status:** **12 of 12** parlcant phases complete (or scoped out); **all** P1+P2 review items resolved.
-**Tests:** 367 unit + 11 doc = **378 tests** in `loon`. 4 unit tests in `loon-chat-ui`. All passing.
+**Tests:** 375 unit + 11 doc = **386 tests** in `loon`. 4 unit tests in `loon-chat-ui`. All passing.
 `cargo clippy --workspace --tests --lib --bins -- -D warnings` clean. Frontend `tsc --noEmit` clean.
 
 ---
@@ -228,14 +228,29 @@ This test (`e2e_data_persists_across_server_rebuilds`) is in `tests/e2e_agent_lo
 
 ---
 
-## 6. Real LLM Integration (Pending)
+## 6. Real LLM Integration
 
-No automated live-LLM test exists. To validate the OpenAI / Anthropic / Gemini providers, run:
+Automated wiremock tests cover both OpenAI and Ollama providers:
+
+- `tests/e2e_agent_loop.rs::e2e_openai_provider_parses_response` —
+  drives the real `OpenAiSchematicGenerator` against a wiremock
+  OpenAI endpoint and asserts correct response parsing.
+- `tests/e2e_ollama.rs::e2e_ollama_provider_parses_response` — same
+  for the Ollama /v1/chat/completions endpoint.
+
+Both run in CI (`cargo test --workspace`) and require no API key.
+
+For a **real LLM verification** against a live OpenAI account:
 
 ```bash
 export OPENAI_API_KEY=sk-...
-cargo run -p loon-server  # starts on :8800
-curl -X POST localhost:8800/v1/agents -d '{"name":"test","description":"x"}'
+export LOON_TEST_LIVE_OPENAI=1
+cargo test --test e2e_openai_live -- --nocapture
+```
+
+Or use the helper script:
+```bash
+./scripts/run-llm-live.sh
 ```
 
 A future test fixture could mock the wiremock server for the OpenAI chat-completions endpoint and assert the request shape, but this has not yet been written.
