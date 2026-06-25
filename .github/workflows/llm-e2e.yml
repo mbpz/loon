@@ -1,0 +1,15 @@
+name: LLM E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  llm-wiremock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run wiremock LLM tests
+        run: cargo test --workspace --test e2e_agent_loop --test e2e_ollama e2e_openai_provider_parses_response e2e_ollama_provider_parses_response

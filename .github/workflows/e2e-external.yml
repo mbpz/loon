@@ -1,0 +1,52 @@
+name: E2E External Services
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'  # weekly
+
+jobs:
+  mongodb:
+    runs-on: ubuntu-latest
+    if: ${{ vars.RUN_EXTERNAL_E2E == 'true' }}
+    services:
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run MongoDB e2e
+        env:
+          LOON_TEST_MONGODB_URI: mongodb://localhost:27017
+        run: cargo test --test e2e_mongodb
+
+  chroma:
+    runs-on: ubuntu-latest
+    if: ${{ vars.RUN_EXTERNAL_E2E == 'true' }}
+    services:
+      chroma:
+        image: chromadb/chroma:0.4.24
+        ports: ['8000:8000']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run Chroma e2e
+        env:
+          LOON_TEST_CHROMA_URI: http://localhost:8000
+        run: cargo test --workspace chroma
+
+  qdrant:
+    runs-on: ubuntu-latest
+    if: ${{ vars.RUN_EXTERNAL_E2E == 'true' }}
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.9.0
+        ports: ['6333:6333', '6334:6334']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run Qdrant e2e
+        env:
+          LOON_TEST_QDRANT_URI: http://localhost:6334
+        run: cargo test --workspace qdrant

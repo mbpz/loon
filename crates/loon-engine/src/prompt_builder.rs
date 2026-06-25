@@ -29,6 +29,22 @@ impl PromptBuilder {
     }
 }
 
+/// Result of [`PromptBuilder::build_prompt_with_stats`].
+#[derive(Debug, Clone)]
+pub struct PromptBuildResult {
+    /// The assembled (and possibly truncated) prompt text.
+    pub prompt: String,
+    /// Number of conversation messages dropped to fit the token budget.
+    /// `0` if no truncation was needed or if the conversation was empty.
+    pub dropped_messages: usize,
+    /// Token count of the final prompt (approximate; uses the configured
+    /// tokenizer). `0` if the tokenizer failed to count.
+    pub tokens_used: u32,
+    /// `true` if the history section was dropped entirely (budget was
+    /// unsatisfiable even with no history).
+    pub history_dropped_entirely: bool,
+}
+
 impl PromptBuilder {
     /// Build the final agent-response prompt. Sections (in order):
     ///   1. Agent identity and description
@@ -41,6 +57,9 @@ impl PromptBuilder {
     ///   8. Canned responses (strict mode hint)
     ///   9. Recent conversation history
     ///   10. Instruction to respond
+    ///
+    /// Thin wrapper around [`build_prompt_with_stats`] retained for
+    /// back-compat. Returns only the assembled prompt string.
     #[allow(clippy::too_many_arguments)]
     pub async fn build_prompt(
         &self,
@@ -54,6 +73,40 @@ impl PromptBuilder {
         capabilities: &[Capability],
         canned_responses: &[CannedResponse],
     ) -> EngineResult<String> {
+        Ok(self
+            .build_prompt_with_stats(
+                agent,
+                interaction,
+                matched_guidelines,
+                glossary_terms,
+                context_variables,
+                tool_results,
+                journey_state,
+                capabilities,
+                canned_responses,
+            )
+            .await?
+            .prompt)
+    }
+
+    /// Like [`build_prompt`] but returns a [`PromptBuildResult`] with
+    /// truncation stats. When the assembled prompt exceeds
+    /// `max_tokens`, the oldest conversation messages are dropped one at
+    /// a time until the budget is satisfied. If even an empty history
+    /// is over budget, the history section is removed entirely.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn build_prompt_with_stats(
+        &self,
+        agent: &Agent,
+        interaction: &Interaction,
+        matched_guidelines: &[GuidelineMatch],
+        glossary_terms: &[Term],
+        context_variables: &[(ContextVariable, ContextVariableValue)],
+        tool_results: &[ToolExecutionResult],
+        journey_state: Option<&JourneyNode>,
+        capabilities: &[Capability],
+        canned_responses: &[CannedResponse],
+    ) -> EngineResult<PromptBuildResult> {
         let mut sections: Vec<String> = Vec::new();
 
         // 1. Identity
@@ -163,6 +216,8 @@ impl PromptBuilder {
         // the history section entirely. We still emit the prompt —
         // a truncated prompt is preferable to refusing to respond.
         let mut tokens = self.tokenizer.count_tokens(&prompt).await.unwrap_or(0);
+        let mut dropped_messages: usize = 0;
+        let mut history_dropped_entirely = false;
         if (tokens as usize) > self.max_tokens && !messages.is_empty() {
             tracing::warn!(
                 "prompt over token budget: {} > {}, truncating history",
@@ -176,12 +231,14 @@ impl PromptBuilder {
                     Some(s) => sections[history_index] = s,
                     None => {
                         sections.remove(history_index);
+                        history_dropped_entirely = true;
                         break;
                     }
                 }
                 prompt = sections.join("\n\n");
                 tokens = self.tokenizer.count_tokens(&prompt).await.unwrap_or(0);
             }
+            dropped_messages = initial_take.saturating_sub(take);
             if (tokens as usize) > self.max_tokens {
                 tracing::warn!(
                     "prompt still over token budget after truncation: {} > {}",
@@ -191,7 +248,12 @@ impl PromptBuilder {
             }
         }
 
-        Ok(prompt)
+        Ok(PromptBuildResult {
+            prompt,
+            dropped_messages,
+            tokens_used: tokens,
+            history_dropped_entirely,
+        })
     }
 
     /// Build a prompt that asks an LLM to score which guidelines
@@ -410,6 +472,79 @@ mod tests {
             tokens <= 100 || !has_history_header,
             "expected truncation to keep tokens<=100 or drop history; got tokens={tokens}, has_history={has_history_header}, prompt=\n{prompt}"
         );
+    }
+
+    #[tokio::test]
+    async fn prompt_stats_reports_dropped_count() {
+        // Small budget: WsTok counts whitespace-separated tokens, so
+        // a 50-token budget is easily exceeded by 10 long messages.
+        let pb = PromptBuilder::new(Arc::new(WsTok), 50);
+        let mut events = Vec::new();
+        for i in 0..10 {
+            events.push(mk_message_event(
+                EventSource::Customer,
+                &format!("long message number {} with many tokens", i),
+            ));
+        }
+        let interaction = Interaction::new(events);
+        let result = pb
+            .build_prompt_with_stats(
+                &agent(),
+                &interaction,
+                &[],
+                &[],
+                &[],
+                &[],
+                None,
+                &[],
+                &[],
+            )
+            .await
+            .unwrap();
+        assert!(
+            result.dropped_messages > 0,
+            "expected at least one message dropped, got dropped={}, tokens_used={}, prompt=\n{}",
+            result.dropped_messages,
+            result.tokens_used,
+            result.prompt
+        );
+        // tokens_used should be reported and should be at or under the budget
+        // (or history was dropped entirely, in which case the budget is
+        // unsatisfiable with the current setup but truncation was attempted).
+        assert!(
+            (result.tokens_used as usize) <= 50 || result.history_dropped_entirely,
+            "expected tokens_used<=50 or history_dropped_entirely=true, got tokens_used={}, history_dropped_entirely={}, prompt=\n{}",
+            result.tokens_used,
+            result.history_dropped_entirely,
+            result.prompt
+        );
+    }
+
+    #[tokio::test]
+    async fn prompt_stats_reports_zero_dropped_when_under_budget() {
+        // Generous budget: nothing should be dropped.
+        let pb = PromptBuilder::new(Arc::new(WsTok), 8000);
+        let interaction = Interaction::new(vec![mk_message_event(
+            EventSource::Customer,
+            "short",
+        )]);
+        let result = pb
+            .build_prompt_with_stats(
+                &agent(),
+                &interaction,
+                &[],
+                &[],
+                &[],
+                &[],
+                None,
+                &[],
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.dropped_messages, 0);
+        assert!(!result.history_dropped_entirely);
+        assert!(result.tokens_used > 0);
     }
 
     #[tokio::test]

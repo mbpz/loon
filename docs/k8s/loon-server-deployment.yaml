@@ -1,0 +1,79 @@
+# Phase 12: minimal single-replica loon-server deployment.
+# Multi-replica would need a consensus layer (Redis state, see
+# crates/loon-persistence/src/distributed_state.rs).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loon-server
+  labels:
+    app: loon-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loon-server
+  template:
+    metadata:
+      labels:
+        app: loon-server
+    spec:
+      containers:
+        - name: loon-server
+          image: loon-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8800
+              name: http
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: loon-secrets
+                  key: openai-api-key
+            - name: LOON_AUTH_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: loon-secrets
+                  key: auth-tokens
+            - name: RUST_LOG
+              value: "info"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loon-server
+  labels:
+    app: loon-server
+spec:
+  type: ClusterIP
+  selector:
+    app: loon-server
+  ports:
+    - port: 8800
+      targetPort: http
+      name: http

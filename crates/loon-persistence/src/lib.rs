@@ -2,6 +2,7 @@
 
 pub mod backends;
 pub mod config;
+pub mod distributed_state;
 pub mod document;
 pub mod error;
 pub mod filter;
@@ -11,6 +12,7 @@ pub mod vector;
 
 pub use backends::*;
 pub use config::*;
+pub use distributed_state::*;
 pub use document::*;
 pub use error::*;
 pub use filter::*;

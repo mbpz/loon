@@ -33,7 +33,7 @@ use loon_engine::{
     message_generator::MessageGenerator,
     optimization_policy::DefaultOptimizationPolicy,
     perceived_performance_policy::PerceivedPerformancePolicy,
-    planner::{NoopPlanner, Plan, Planner},
+    planner::{Plan, Planner},
     prompt_builder::PromptBuilder,
     relational_resolver::RelationalResolver,
     tool_calling::caller::{ToolCaller, ToolExecutionResult},
