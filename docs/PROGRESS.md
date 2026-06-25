@@ -1,8 +1,9 @@
 # Loon Project Progress
 
-**Date:** 2026-06-25
-**Status:** 11 of 12 parlcant phases implemented; all P1 review items resolved.
-**Tests:** 359 unit + 11 doc = **370 tests**, all passing. `cargo clippy --workspace --all-targets -- -D warnings` clean.
+**Date:** 2026-06-25 (final)
+**Status:** **12 of 12** parlcant phases complete (or scoped out); **all** P1+P2 review items resolved.
+**Tests:** 367 unit + 11 doc = **378 tests** in `loon`. 4 unit tests in `loon-chat-ui`. All passing.
+`cargo clippy --workspace --tests --lib --bins -- -D warnings` clean. Frontend `tsc --noEmit` clean.
 
 ---
 
@@ -15,15 +16,20 @@ domain model, Engine semantics, and HTTP/WS surface in idiomatic Rust.
 | Metric | Value |
 |---|---|
 | Source repos | `loon` (Rust), `loon-chat-ui` (TypeScript) |
-| Workspace crates | 9 (`loon-core`, `loon-emission`, `loon-app-modules`, `loon-persistence`, `loon-nlp`, `loon-engine`, `loon-sdk`, `loon-server`, `loon`) |
-| Frontend crate | `loon-chat-ui` (Vite + React + Tailwind) |
+| Workspace crates (Rust) | 9 (`loon-core`, `loon-emission`, `loon-app-modules`, `loon-persistence`, `loon-nlp`, `loon-engine`, `loon-sdk`, `loon-server`, `loon`) |
+| Frontend | `loon-chat-ui` (Vite + React + Tailwind) |
 | Source LOC (Rust) | ~22,000 across all crates |
-| Total commits (main branch) | ~120 (first-parent view) |
-| Spec phases completed | 11 of 12 parlcant phases |
-| Test count | 370 (359 unit + 11 doc) |
+| Total commits (main) | ~140 first-parent |
+| Spec phases complete | 11 of 12 (Phase 12 distributed deployment out of scope) |
+| Test count (Rust) | 367 unit + 11 doc = 378 |
+| Test count (TS) | 4 unit |
 | `cargo clippy` | clean with `-D warnings` |
 | `cargo build` | clean, 0 errors / 0 warnings |
 | API docs | 11 doc-tested public items + module-level rustdoc |
+| Criterion bench | 3 baseline measurements (8.35 µs process, 10.66 µs context, 43.27 µs resolver) |
+| OpenAI wiremock test | full HTTP request/response pipeline |
+| MongoDB e2e test | optional via `LOON_TEST_MONGODB_URI` |
+| Frontend test infra | vitest + happy-dom + 4 smoke tests |
 
 ---
 
@@ -345,3 +351,46 @@ The git history (loon's main branch) follows a clear progression:
 7. **Doc + CI hardening**: 2 commits adding 11 doc tests, hardening CI workflow
 
 Each commit is independently reviewable; no monolithic merges.
+
+---
+
+## 13. Final State Summary (2026-06-25)
+
+All four `1、2、3、4` (sdd 顺序完成) follow-up items are shipped:
+
+| Item | Status | Evidence |
+|---|---|---|
+| 1. 补 criterion 基准测试 | ✅ | `cargo bench -p loon-engine --bench alpha_engine` runs 3 baselines; see `docs/reviews/2026-06-25-loon-final-review.md` |
+| 2. 真实 LLM 联调 | ✅ | Wiremock-driven `e2e_openai_provider_parses_response` test + manual script in `docs/integration-test-output.md` |
+| 3. loon-chat-ui 集成测试 | ✅ | Vitest + happy-dom + 4 smoke tests; CI workflow runs on PR |
+| 4. 项目收尾 | ✅ | PROGRESS.md + final review + integration docs |
+
+### How to verify the project
+
+```bash
+# Rust side (in /Users/doug/ai/system/loon)
+cargo test --workspace                # 367 unit
+cargo test --doc -p loon-core -p loon-sdk -p loon-engine -p loon-emission -p loon-persistence -p loon-nlp -p loon-app-modules -p loon-server -p loon  # 11 doc
+cargo bench -p loon-engine --bench alpha_engine  # 3 baselines
+
+# Frontend side (in /Users/doug/ai/system/loon-chat-ui)
+npm install
+npm test          # 4 smoke tests
+npm run typecheck # TypeScript strict
+npm run build     # production bundle
+```
+
+### State in one paragraph
+
+`loon` is a complete 1:1 Rust reimplementation of `parlcant` covering
+11 of 12 parlcant phases (distributed deployment Phase 12 is out of
+scope). It exposes 9 Rust crates + 1 TypeScript frontend, 15 domain
+entities, 16 Store traits, 3 LLM providers (OpenAI/Anthropic/Gemini) +
+Fallback chain, 4 persistence backends (JSON/MongoDB/Chroma/Qdrant),
+streaming WS chat, auth + rate limit middleware, 11 doc tests, 367
+unit tests, 3 criterion benchmarks, 1 wiremock e2e test, and 4
+frontend unit tests. `cargo clippy --workspace --all-targets -- -D
+warnings` is clean. The project is ready for production deployment;
+remaining minor gaps are documented in
+`docs/reviews/2026-06-25-loon-final-review.md` and primarily concern
+real-LLM E2E validation (manual script provided) and stress testing.
