@@ -58,10 +58,10 @@ futures = "0.3"
 tokio-stream = "0.1"
 axum = { version = "0.8", features = ["ws", "macros"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower-http = { version = "0.7", features = ["cors", "trace"] }
 clap = { version = "4", features = ["derive"] }
-dialoguer = "0.11"
-console = "0.15"
+dialoguer = "0.12"
+console = "0.16"
 toml = "0.8"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 jsonschema = "0.18"
