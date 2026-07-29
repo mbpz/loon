@@ -9,7 +9,7 @@ license.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 nanoid = { workspace = true }
-base64 = "0.22"
+base64 = "0.23"
 xxhash-rust = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
